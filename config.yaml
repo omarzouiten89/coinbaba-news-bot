@@ -12,7 +12,6 @@ target_channel_public: "financemante"
 # بلا حساب Telegram. اكتب @اسم_القناة أو الرابط https://t.me/...
 telegram_channels:
   - "@WatcherGuru"
-  - "@QamarAlali16"
   - "@knowMoreCrypt00"
   - "@CoinDeskGlobal"
 
