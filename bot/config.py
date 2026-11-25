@@ -36,6 +36,7 @@ class Settings:
     lessons: dict = field(default_factory=dict)
     polls: dict = field(default_factory=dict)
     morning: dict = field(default_factory=dict)
+    mirrors: list = field(default_factory=list)
     news_min_importance: int = 0
     quiet_hours: dict = field(default_factory=dict)
     silent_news: bool = False
@@ -97,6 +98,7 @@ def load_settings(config_path: Optional[Path] = None) -> Settings:
         lessons=dict(cfg.get("daily_lessons") or {}),
         polls=dict(cfg.get("daily_polls") or {}),
         morning=dict(cfg.get("morning_brief") or {}),
+        mirrors=list(cfg.get("mirrors") or []),
         news_min_importance=int(cfg.get("news_min_importance") or 0),
         quiet_hours=dict(cfg.get("quiet_hours") or {}),
         silent_news=bool(cfg.get("silent_news", False)),

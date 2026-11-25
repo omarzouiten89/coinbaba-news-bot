@@ -58,6 +58,10 @@ async def run_bot(settings) -> None:
         tasks.append(asyncio.create_task(
             lessons_loop(settings, storage, rewriter, publisher, pipeline, alert)))
 
+    if settings.mirrors:
+        from bot.mirror import mirror_loop
+        tasks.append(asyncio.create_task(mirror_loop(settings.mirrors, settings.bot_token, storage, alert)))
+
     if settings.morning.get("enabled"):
         from bot.morning import morning_loop
         tasks.append(asyncio.create_task(
@@ -141,6 +145,13 @@ async def run_once(settings) -> None:
                 await post_due_lesson(settings, storage, rewriter, publisher, pipeline)
             except Exception as exc:
                 log.warning("Lesson failed (will retry next run): %s", exc)
+        for cfg in settings.mirrors:
+            if cfg.get("enabled", True) and cfg.get("link"):
+                from bot.mirror import run_mirror
+                try:
+                    await run_mirror(cfg, settings.bot_token, storage, silent=False)
+                except Exception as exc:
+                    log.warning("Mirror failed (will retry next run): %s", exc)
         if settings.morning.get("enabled"):
             from bot.morning import post_due_brief
             try:
@@ -218,13 +229,20 @@ async def test_rss(settings, per_feed: int = 2) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="COINBABA news bot")
-    parser.add_argument("command", nargs="?", default="run", choices=["run", "once", "find-channel", "test-rss"])
+    parser.add_argument("command", nargs="?", default="run",
+                        choices=["run", "once", "find-channel", "test-rss", "mirror-backfill"])
     args = parser.parse_args()
     settings = load_settings()
     setup_logging(settings)
     try:
         if args.command == "find-channel":
             asyncio.run(find_channel(settings))
+        elif args.command == "mirror-backfill":
+            from bot.mirror import run_mirror
+            storage = Storage(settings.data_dir / "bot.db")
+            for cfg in settings.mirrors:
+                n = asyncio.run(run_mirror(cfg, settings.bot_token, storage, silent=True, backfill=True))
+                print(f"{cfg['source']} -> {cfg['target']}: {n} old post(s) copied")
         elif args.command == "once":
             asyncio.run(run_once(settings))
         elif args.command == "test-rss":

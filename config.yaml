@@ -78,6 +78,15 @@ daily_polls:
   enabled: true
   times: ["13:00", "19:00"]   # بتوقيت الإمارات
 
+# ===== نقل منشورات قناة إلى قناة (HashNet) =====
+mirrors:
+  - source: "@HashnetArab"          # القناة اللي كناخذو منها
+    target: "@cryptoomentor"        # القناة ديالك (HashNet Arab)
+    keep_link_domains: ["zoom.us"]  # الروابط اللي كتبقى. أي رابط آخر كيتحيد
+    footer: "👈 سجّل الآن من هنا:"
+    link: "https://app.hashnet.ai/Onemillion"   # رابط التسجيل ديالك
+    start_after_id: 259             # نبداو من المنشور 260 (بداية منتج التأجير Lease)
+
 # ===== الإعلان اليومي ديال الدورات (مرة فالنهار، بأزرار كتدي للموقع) =====
 daily_promo:
   enabled: false          # كيولي true ملي نحطو الروابط
