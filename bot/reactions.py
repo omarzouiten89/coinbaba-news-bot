@@ -15,6 +15,9 @@ import httpx
 log = logging.getLogger(__name__)
 
 DEFAULT = ["❤", "🔥", "👍", "👏", "💯", "⚡", "🤩", "🏆", "🎉", "🙏", "😍"]
+# Only clearly positive reactions are ever used (no 😱 😢 👎 🤔 🐳 🍓 ...).
+POSITIVE = {"❤", "❤️", "🔥", "👍", "👏", "💯", "⚡", "🤩", "🏆", "🎉", "🙏", "😍", "🥰", "❤‍🔥",
+            "😎", "💘", "🆒", "🙌", "👌", "⭐", "✨", "💪"}
 _allowed: Dict[str, List[str]] = {}
 _last: Dict[str, str] = {}
 
@@ -24,7 +27,8 @@ async def _channel_emojis(client: httpx.AsyncClient, api: str, chat_id: str) -> 
         try:
             chat = (await client.get(api + "getChat", params={"chat_id": chat_id})).json().get("result", {})
             avail = chat.get("available_reactions")
-            emojis = [r["emoji"] for r in avail or [] if r.get("type") == "emoji" and r.get("emoji")]
+            emojis = [r["emoji"] for r in avail or []
+                      if r.get("type") == "emoji" and r.get("emoji") in POSITIVE]
             _allowed[chat_id] = emojis if avail is not None and emojis else DEFAULT
         except (httpx.HTTPError, ValueError):
             return DEFAULT
