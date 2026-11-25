@@ -29,6 +29,7 @@ class MirrorPost:
     html_text: str                                # Telegram HTML, already cleaned
     photos: List[str] = field(default_factory=list)
     videos: List[str] = field(default_factory=list)
+    audios: List[str] = field(default_factory=list)   # voice messages / audio files
 
 
 def _allowed(url: str, keep_domains: List[str]) -> bool:
@@ -76,10 +77,12 @@ def parse_page(name: str, page: str, keep_domains: List[str]) -> List[MirrorPost
         t = re.search(r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>', block, re.S)
         photos = re.findall(r"tgme_widget_message_photo_wrap[^>]*background-image:url\('([^']+)'\)", block)
         videos = re.findall(r'<video[^>]+src="([^"]+)"', block)
+        audios = re.findall(r'<audio[^>]+src="([^"]+)"', block)
         text = clean_html(t.group(1), keep_domains) if t else ""
-        if text or photos or videos:
+        if text or photos or videos or audios:
             posts.append(MirrorPost(int(m.group(1)), text, [htmllib.unescape(p) for p in photos],
-                                    [htmllib.unescape(v) for v in videos]))
+                                    [htmllib.unescape(v) for v in videos],
+                                    [htmllib.unescape(a) for a in audios]))
     return posts
 
 
@@ -143,6 +146,20 @@ class MirrorPublisher:
                 media.append((kind, content))
         media = media[:10]
         fits = visible_len(text) <= CAPTION_LIMIT
+        if p.audios and not media:  # voice message: sent as a voice note with the text as caption
+            content = await self._download(p.audios[0])
+            if content:
+                data = dict(base)
+                if fits:
+                    data["caption"] = text
+                is_ogg = content[:4] == b"OggS"
+                try:
+                    await self._call("sendVoice" if is_ogg else "sendAudio", data,
+                                     {"voice" if is_ogg else "audio": ("voice.ogg" if is_ogg else "audio.mp3", content)})
+                    if fits:
+                        return
+                except RuntimeError as exc:
+                    log.warning("Audio failed for post %s (%s)", p.msg_id, exc)
         try:
             if len(media) > 1:
                 items, files = [], {}
@@ -205,6 +222,11 @@ async def run_mirror(cfg: dict, bot_token: str, storage, silent: bool = True, ba
             storage.set(key, str(posts[-1].msg_id))
             log.info("Mirror %s initialised at post %s (old posts not copied)", source, posts[-1].msg_id)
         return 0
+    if cfg.get("only") == "audio":
+        newest = posts[-1].msg_id if posts else None
+        posts = [p for p in posts if p.audios]
+        if not posts and newest:
+            storage.set(key, str(newest))  # nothing to copy, move on
     if limit:
         posts = posts[:limit]
     # Hybrid safety (Mac + GitHub): skip posts whose text is already in the target channel.

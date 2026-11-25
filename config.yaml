@@ -89,6 +89,15 @@ mirrors:
     inquiry_label: "💬 للاستفسار تواصل مع المساعد"
     inquiry_link: "https://t.me/CoinBabaOfficialBot?start=hashnet"   # البوت اللي كيجاوب الناس
 
+  - source: "@Hashnet11"            # HashNet مشروع العمر
+    target: "@cryptoomentor"
+    only: audio                     # غير المنشورات اللي فيها أوديو / رسالة صوتية
+    keep_link_domains: ["zoom.us"]
+    footer: "👈 سجّل الآن من هنا"
+    link: "https://app.hashnet.ai/Onemillion"
+    inquiry_label: "💬 للاستفسار تواصل مع المساعد"
+    inquiry_link: "https://t.me/CoinBabaOfficialBot?start=hashnet"
+
 # ===== الإعلان اليومي ديال الدورات (مرة فالنهار، بأزرار كتدي للموقع) =====
 daily_promo:
   enabled: false          # كيولي true ملي نحطو الروابط
