@@ -144,7 +144,8 @@ def _photo_layer(height: int) -> Optional[Image.Image]:
     return layer
 
 
-def render_card(title: str, badge: str = "معلومة اليوم", handle: str = "@financemante") -> bytes:
+def render_card(title: str, badge: str = "معلومة اليوم", handle: str = "@financemante",
+                subtitle: str = "") -> bytes:
     img = _background()
     draw = ImageDraw.Draw(img)
 
@@ -182,11 +183,17 @@ def render_card(title: str, badge: str = "معلومة اليوم", handle: str 
             break
         size -= 6
     line_h = int(size * 1.45)
-    block_h = line_h * len(lines)
+    sub_size = 44
+    sub_h = int(sub_size * 1.6) if subtitle else 0
+    block_h = line_h * len(lines) + sub_h
     y = 470 - block_h // 2
     for line in lines:
         _draw_mixed_right(draw, area_right, y, _ar(line), title_font, digit_font, WHITE)
         y += line_h
+    if subtitle:  # e.g. the date of the morning brief: smaller and gold
+        _draw_mixed_right(draw, area_right, y, _ar(card_title(subtitle)), _font(sub_size),
+                          _latin_font(int(sub_size * 0.92)), GOLD)
+        y += sub_h
     draw.rounded_rectangle((area_right - 150, y + 18, area_right, y + 26), radius=4, fill=GOLD)
 
     # Handle (bottom right)

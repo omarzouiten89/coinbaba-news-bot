@@ -197,8 +197,9 @@ async def post_due_brief(settings, storage, rewriter, publisher, pipeline) -> bo
     text = await build_brief(settings, rewriter, pipeline)
     while visible_length(text) > 1024 and SEP in text:  # too long for a photo caption: drop the agenda
         text = text.rsplit(SEP, 2)[0] + SEP + "\n" + text.rsplit("\n", 1)[-1]
-    card = await asyncio.to_thread(render_card, f"ملخص الصباح {arabic_date(now)}", "صباح الخير",
-                                   f"@{settings.target_channel_public}" if settings.target_channel_public else "")
+    card = await asyncio.to_thread(render_card, "ملخص الصباح", "صباح الخير",
+                                   f"@{settings.target_channel_public}" if settings.target_channel_public else "",
+                                   arabic_date(now))
     await publisher.send_post(text, card, is_html=True)
     storage.set(key, "1")
     plain = html.unescape(re.sub(r"<[^>]+>", "", text))
