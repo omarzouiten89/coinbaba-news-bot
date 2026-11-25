@@ -1,0 +1,8 @@
+# secrets and local data: never uploaded
+.env
+data/
+*.session
+.venv/
+__pycache__/
+*.pyc
+.DS_Store

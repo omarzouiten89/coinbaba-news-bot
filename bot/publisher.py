@@ -1,0 +1,144 @@
+"""Publishes posts to the COINBABA channel through the Telegram Bot API.
+
+Posts are sent as NEW messages (sendPhoto / sendMessage), never forwarded,
+so they never show "Forwarded from".
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from typing import Dict, List, Optional, Union
+
+import httpx
+
+from .textutils import to_telegram_html
+
+log = logging.getLogger(__name__)
+
+CAPTION_LIMIT = 1024
+MESSAGE_LIMIT = 4096
+
+
+class PublishError(Exception):
+    pass
+
+
+class Publisher:
+    def __init__(self, bot_token: str, channel: Union[str, int, None], dry_run: bool = False):
+        if not dry_run and not bot_token:
+            raise PublishError("BOT_TOKEN is missing in .env")
+        if not dry_run and channel in (None, ""):
+            raise PublishError("target_channel is missing in config.yaml")
+        self.base = f"https://api.telegram.org/bot{bot_token}/"
+        self.channel = channel
+        self.dry_run = dry_run
+        self._client = httpx.AsyncClient(timeout=120)
+
+    async def _call(self, method: str, data: dict, files: Optional[dict] = None) -> dict:
+        for attempt in range(4):
+            try:
+                resp = await self._client.post(self.base + method, data=data, files=files)
+                payload = resp.json()
+            except (httpx.HTTPError, ValueError) as exc:
+                if attempt == 3:
+                    raise PublishError(f"{method}: network error {exc}")
+                await asyncio.sleep(5 * (attempt + 1))
+                continue
+            if payload.get("ok"):
+                return payload["result"]
+            retry_after = (payload.get("parameters") or {}).get("retry_after")
+            if resp.status_code == 429 and retry_after and attempt < 3:
+                log.warning("Telegram asked to wait %ss", retry_after)
+                await asyncio.sleep(int(retry_after) + 1)
+                continue
+            raise PublishError(f"{method}: {payload.get('description', resp.text[:200])}")
+        raise PublishError(f"{method}: gave up after retries")
+
+    async def send_post(self, text: str, image: Optional[bytes]) -> Optional[int]:
+        """Sends the post; returns the Telegram message id (None in dry-run)."""
+        if self.dry_run:
+            print("\n" + "=" * 60 + f"\n[DRY RUN] {'with image (' + str(len(image)) + ' bytes)' if image else 'text only'}\n" + text + "\n" + "=" * 60)
+            return None
+
+        if image:
+            try:
+                result = await self._call(
+                    "sendPhoto",
+                    data={"chat_id": str(self.channel), "caption": to_telegram_html(text), "parse_mode": "HTML"},
+                    files={"photo": ("photo.jpg", image)},
+                )
+                return result.get("message_id")
+            except PublishError as exc:
+                # A broken image should not lose the news: fall back to text only.
+                log.warning("Photo upload failed (%s); sending text only", exc)
+
+        result = await self._call(
+            "sendMessage",
+            data={
+                "chat_id": str(self.channel),
+                "text": to_telegram_html(text),
+                "parse_mode": "HTML",
+                "disable_web_page_preview": "true",
+            },
+        )
+        return result.get("message_id")
+
+    async def send_promo(self, text: str, buttons: List[dict], image_url: Optional[str] = None) -> Optional[int]:
+        """Sends the daily promo post with clickable link buttons under it."""
+        import json
+        keyboard = {"inline_keyboard": [[{"text": b["text"], "url": b["url"]}] for b in buttons if b.get("url")]}
+        if self.dry_run:
+            print(f"\n[DRY RUN promo]\n{text}\nbuttons: {[b['text'] for b in buttons]}")
+            return None
+        markup = json.dumps(keyboard, ensure_ascii=False)
+        if image_url:
+            result = await self._call("sendPhoto", data={
+                "chat_id": str(self.channel), "photo": image_url, "caption": text, "reply_markup": markup})
+        else:
+            result = await self._call("sendMessage", data={
+                "chat_id": str(self.channel), "text": text, "reply_markup": markup,
+                "disable_web_page_preview": "true"})
+        return result.get("message_id")
+
+    async def send_private(self, chat_id: int, text: str) -> None:
+        if self.dry_run:
+            print(f"[DRY RUN alert to owner] {text}")
+            return
+        await self._call("sendMessage", data={"chat_id": str(chat_id), "text": text})
+
+    async def find_chats(self) -> List[dict]:
+        """Lists channels/groups the bot recently saw (used to discover the channel id)."""
+        updates = await self._call("getUpdates", data={"allowed_updates": '["my_chat_member","channel_post","message"]'})
+        chats: Dict[int, dict] = {}
+        for upd in updates:
+            for key in ("my_chat_member", "channel_post", "message"):
+                chat = (upd.get(key) or {}).get("chat")
+                if chat:
+                    chats[chat["id"]] = chat
+        return list(chats.values())
+
+    async def close(self) -> None:
+        await self._client.aclose()
+
+
+class Alerter:
+    """Sends short problem reports to the owner in private, at most once per hour per message."""
+
+    def __init__(self, publisher: Publisher, owner_chat_id: Optional[int]):
+        self.publisher = publisher
+        self.owner_chat_id = owner_chat_id
+        self._last: Dict[str, float] = {}
+
+    async def __call__(self, text: str) -> None:
+        log.warning("ALERT: %s", text)
+        if not self.owner_chat_id:
+            return
+        now = time.monotonic()
+        if now - self._last.get(text, -1e9) < 3600:
+            return
+        self._last[text] = now
+        try:
+            await self.publisher.send_private(self.owner_chat_id, "⚠️ COINBABA Bot\n" + text)
+        except Exception as exc:  # never crash because an alert failed
+            log.error("Could not send alert: %s", exc)

@@ -1,0 +1,55 @@
+# ===== إعدادات بوت COINBABA (ماشي سرية) =====
+
+# القناة اللي غادي ينشر فيها البوت.
+# في البداية: القناة التجريبية. باش تعرف الرقم ديالها شغّل:  python3 run.py find-channel
+# مثال: -1001234567890
+target_channel: "-1003886652808"   # Finance Man بالعربي (@financemante)
+# القناة التجريبية COINBABA Test: -1004409432582
+
+# القنوات اللي كنراقبو (خاصهم يكونو قنوات عامة). البوت كيقراهم من الصفحة العامة t.me/s
+# بلا حساب Telegram. اكتب @اسم_القناة أو الرابط https://t.me/...
+telegram_channels:
+  - "@WatcherGuru"
+  - "@QamarAlali16"
+  - "@knowMoreCrypt00"
+  - "@CoinDeskGlobal"
+
+# المواقع الإخبارية (RSS)
+rss_feeds:
+  - name: Cointelegraph
+    url: https://cointelegraph.com/rss
+  - name: CoinDesk
+    url: https://www.coindesk.com/arc/outboundfeeds/rss/
+
+# أقصى عدد ديال المنشورات فالنهار (توقيت الإمارات)
+daily_limit: 60
+timezone: Asia/Dubai
+
+# كل شحال من ثانية كيشوف المواقع (180 = 3 دقائق)
+rss_interval_seconds: 180
+
+# كل شحال من ثانية كيشوف قنوات Telegram (60 = دقيقة)
+channel_check_seconds: 60
+
+# الأخبار اللي فاتها هاد العدد ديال الساعات ما كتنشرش
+max_item_age_hours: 6
+
+# أقل وقت بين طلبين للذكاء الاصطناعي (باش نبقاو في الحد المجاني)
+llm_min_interval_seconds: 7
+
+# ===== الإعلان اليومي ديال الدورات (مرة فالنهار، بأزرار كتدي للموقع) =====
+daily_promo:
+  enabled: false          # كيولي true ملي نحطو الروابط
+  time: "20:00"           # الساعة بتوقيت الإمارات
+  image_url: ""           # (اختياري) رابط صورة الإعلان
+  text: |
+    🎓 تعلّم الاستثمار مع COINBABA
+
+    دورات عملية تشرح لك أسواق الكريبتو والذهب والأسهم الأمريكية خطوة بخطوة، من الصفر حتى الاحتراف.
+
+    👇 اكتشف الدورات من الأزرار أسفله
+  buttons:
+    - text: "🎓 الدورات"
+      url: ""
+    - text: "🌐 الموقع الرسمي"
+      url: ""

@@ -1,0 +1,67 @@
+# Runs the COINBABA news bot every 10 minutes on GitHub (free), without any computer switched on.
+name: COINBABA news bot
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: news-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # only used by the keep-alive step below
+  actions: write    # lets the run save its memory (cache)
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # The bot's memory (what it already saw / published) is kept between runs.
+      - name: Restore memory
+        uses: actions/cache/restore@v4
+        with:
+          path: data/bot.db
+          key: bot-db-${{ github.run_id }}
+          restore-keys: bot-db-
+
+      - name: Check sources and publish
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OWNER_CHAT_ID: ${{ secrets.OWNER_CHAT_ID }}
+          GEMINI_MODEL: gemini-flash-latest,gemini-3.5-flash,gemini-flash-lite-latest,gemini-3.5-flash-lite
+          DRY_RUN: "0"
+        run: python run.py once
+
+      - name: Save memory
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/bot.db
+          key: bot-db-${{ github.run_id }}
+
+      # GitHub pauses scheduled jobs in repositories with no activity for 60 days.
+      # This makes a tiny commit every ~40 days so the bot never stops.
+      - name: Keep alive
+        run: |
+          last=$(git log -1 --format=%ct)
+          if [ $(( $(date +%s) - last )) -gt $(( 40 * 86400 )) ]; then
+            git config user.name "coinbaba-bot"
+            git config user.email "coinbaba-bot@users.noreply.github.com"
+            date -u > .keepalive
+            git add .keepalive
+            git commit -m "keep alive"
+            git push
+          fi
