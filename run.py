@@ -58,6 +58,11 @@ async def run_bot(settings) -> None:
         tasks.append(asyncio.create_task(
             lessons_loop(settings, storage, rewriter, publisher, pipeline, alert)))
 
+    if settings.morning.get("enabled"):
+        from bot.morning import morning_loop
+        tasks.append(asyncio.create_task(
+            morning_loop(settings, storage, rewriter, publisher, pipeline, alert)))
+
     if settings.polls.get("enabled"):
         from bot.polls import polls_loop
         tasks.append(asyncio.create_task(polls_loop(settings, storage, rewriter, publisher, alert, pipeline)))
@@ -136,6 +141,12 @@ async def run_once(settings) -> None:
                 await post_due_lesson(settings, storage, rewriter, publisher, pipeline)
             except Exception as exc:
                 log.warning("Lesson failed (will retry next run): %s", exc)
+        if settings.morning.get("enabled"):
+            from bot.morning import post_due_brief
+            try:
+                await post_due_brief(settings, storage, rewriter, publisher, pipeline)
+            except Exception as exc:
+                log.warning("Morning brief failed (will retry next run): %s", exc)
         if settings.polls.get("enabled"):
             from bot.polls import post_due_poll
             try:

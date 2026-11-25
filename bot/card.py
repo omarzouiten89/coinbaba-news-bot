@@ -45,6 +45,7 @@ def card_title(text: str) -> str:
     import re
     text = re.sub(r"\(\s*[A-Za-z0-9 .&/+-]+\s*\)", "", text)
     text = re.sub(r"[A-Za-z]+", "", text)
+    text = text.translate(str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩"))  # Arabic digits exist in every Arabic font
     return " ".join(text.split()).replace(" ؟", "؟")
 
 

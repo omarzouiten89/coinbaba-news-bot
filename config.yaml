@@ -63,6 +63,11 @@ max_item_age_hours: 6
 # أقل وقت بين طلبين للذكاء الاصطناعي (باش نبقاو في الحد المجاني)
 llm_min_interval_seconds: 7
 
+# ===== ☀️ ملخص الصباح: الأسعار + أهم الأخبار + أحداث اليوم =====
+morning_brief:
+  enabled: true
+  time: "08:00"   # بتوقيت الإمارات
+
 # ===== 3 معلومات تعليمية فالنهار (بطاقة COINBABA بالصورة ديالك) =====
 daily_lessons:
   enabled: true
