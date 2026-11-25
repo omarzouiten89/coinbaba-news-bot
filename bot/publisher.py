@@ -55,8 +55,10 @@ class Publisher:
             raise PublishError(f"{method}: {payload.get('description', resp.text[:200])}")
         raise PublishError(f"{method}: gave up after retries")
 
-    async def send_post(self, text: str, image: Optional[bytes]) -> Optional[int]:
-        """Sends the post; returns the Telegram message id (None in dry-run)."""
+    async def send_post(self, text: str, image: Optional[bytes], silent: bool = False) -> Optional[int]:
+        """Sends the post; returns the Telegram message id (None in dry-run).
+        silent=True: followers get it without a notification sound."""
+        quiet = {"disable_notification": "true"} if silent else {}
         if self.dry_run:
             print("\n" + "=" * 60 + f"\n[DRY RUN] {'with image (' + str(len(image)) + ' bytes)' if image else 'text only'}\n" + text + "\n" + "=" * 60)
             return None
@@ -65,7 +67,8 @@ class Publisher:
             try:
                 result = await self._call(
                     "sendPhoto",
-                    data={"chat_id": str(self.channel), "caption": to_telegram_html(text), "parse_mode": "HTML"},
+                    data={"chat_id": str(self.channel), "caption": to_telegram_html(text), "parse_mode": "HTML",
+                          **quiet},
                     files={"photo": ("photo.jpg", image)},
                 )
                 return result.get("message_id")
@@ -80,6 +83,7 @@ class Publisher:
                 "text": to_telegram_html(text),
                 "parse_mode": "HTML",
                 "disable_web_page_preview": "true",
+                **quiet,
             },
         )
         return result.get("message_id")

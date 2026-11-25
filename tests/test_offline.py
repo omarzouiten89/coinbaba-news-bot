@@ -31,8 +31,9 @@ class FakePublisher:
     def __init__(self):
         self.sent = []
 
-    async def send_post(self, text, image):
+    async def send_post(self, text, image, silent=False):
         self.sent.append((text, image))
+        self.silent = getattr(self, "silent", []) + [silent]
         return len(self.sent)
 
 
@@ -243,6 +244,38 @@ class PipelineTests(unittest.TestCase):
             return pub
         pub = self.run_async(scenario())
         self.assertEqual(len(pub.sent), 1)  # minor skipped (importance), 2nd Fed skipped (daily max), no gold keyword
+
+    def test_quiet_hours_and_silent(self):
+        class Rw(FakeRewriter):
+            async def process(self, text, *a, **k):
+                self.calls += 1
+                big = "Fed" in text
+                return Decision(publish=True, post="📰 عنوان\nنص الخبر هنا بما يكفي من الطول",
+                                importance=9 if big else 6, breaking=big)
+
+        async def scenario(quiet):
+            pub = FakePublisher()
+            s = make_settings(silent_news=True, news_min_importance=6,
+                              quiet_hours={"start": "00:00", "end": "07:00"})
+            p = Pipeline(s, Storage(":memory:"), Rw(), pub, no_alert)
+            p.in_quiet_hours = lambda now=None: quiet
+            await p.handle(make_item("a", "Normal market update about stocks today"))
+            await p.handle(make_item("b", "Fed emergency rate cut announced now"))
+            await p.close()
+            return pub
+        day = self.run_async(scenario(False))
+        self.assertEqual(day.silent, [True, False])       # normal news silent, breaking with sound
+        night = self.run_async(scenario(True))
+        self.assertEqual(len(night.sent), 1)               # only the breaking news at night
+
+    def test_quiet_window(self):
+        async def scenario():
+            p = Pipeline(make_settings(quiet_hours={"start": "00:00", "end": "07:00"}), Storage(":memory:"),
+                         FakeRewriter(), FakePublisher(), no_alert)
+            result = (p.in_quiet_hours(datetime(2026, 11, 25, 3, 0)), p.in_quiet_hours(datetime(2026, 11, 25, 7, 0)))
+            await p.close()
+            return result
+        self.assertEqual(self.run_async(scenario()), (True, False))
 
     def test_caption_limit_with_image(self):
         class LongRewriter(FakeRewriter):

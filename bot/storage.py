@@ -74,6 +74,12 @@ class Storage:
     def count_posts_on(self, local_date: str) -> int:
         return self.db.execute("SELECT COUNT(*) FROM posts WHERE local_date=?", (local_date,)).fetchone()[0]
 
+    def count_news_on(self, local_date: str) -> int:
+        """News only: lessons and analyses have their own limits."""
+        return self.db.execute(
+            "SELECT COUNT(*) FROM posts WHERE local_date=? AND COALESCE(category,'') NOT IN ('lesson','analysis')",
+            (local_date,)).fetchone()[0]
+
     def count_posts_by_source(self, local_date: str, source: str) -> int:
         return self.db.execute("SELECT COUNT(*) FROM posts WHERE local_date=? AND source=?",
                                (local_date, source)).fetchone()[0]

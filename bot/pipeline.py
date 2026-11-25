@@ -112,17 +112,38 @@ class Pipeline:
             finally:
                 self.queue.task_done()
 
+    def in_quiet_hours(self, now: Optional[datetime] = None) -> bool:
+        q = self.settings.quiet_hours or {}
+        if not q.get("start") or not q.get("end"):
+            return False
+        now = now or datetime.now(self.tz)
+        cur = now.hour * 60 + now.minute
+        sh, sm = (int(x) for x in str(q["start"]).split(":"))
+        eh, em = (int(x) for x in str(q["end"]).split(":"))
+        start, end = sh * 60 + sm, eh * 60 + em
+        return start <= cur < end if start < end else (cur >= start or cur < end)
+
+    def defer(self, item: Item) -> None:
+        """Forget the item so the source loop offers it again later (e.g. after quiet hours)."""
+        self.storage.unmark_seen(item.key)
+        self.storage.unmark_seen("fp:" + fingerprint(item.text))
+
     async def handle(self, item: Item) -> Optional[int]:
         today = self.local_date()
-        if self.storage.count_posts_on(today) >= self.settings.daily_limit:
-            log.info("Daily limit reached, skipping %s", item.key)
+        rules = item.rules
+        is_news = rules.kind != "analysis"
+        quiet = self.in_quiet_hours()
+        if quiet and not is_news:
+            self.defer(item)  # analyses wait for the morning
+            return None
+        if is_news and self.storage.count_news_on(today) >= self.settings.daily_limit:
+            log.info("Daily news limit reached, skipping %s", item.key)
             if self.storage.get("limit_alert") != today:
                 self.storage.set("limit_alert", today)
-                await self.alert(f"وصلنا للحد اليومي ({self.settings.daily_limit} منشور). النشر غادي يرجع غدا.")
+                await self.alert(f"وصلنا للحد اليومي ديال الأخبار ({self.settings.daily_limit}). كيرجع غدا.")
             return None
         if item.age_hours() > self.settings.max_item_age_hours:
             return None
-        rules = item.rules
         if rules.keywords and not any(k in item.text.lower() for k in rules.keywords):
             log.info("Skip (no keyword match) %s", item.key)
             return None
@@ -145,8 +166,13 @@ class Pipeline:
         if not decision.publish or decision.duplicate:
             log.info("Not published (%s): %s", decision.reason or "rejected", item.key)
             return None
-        if decision.importance < rules.min_importance:
-            log.info("Not published (importance %d < %d): %s", decision.importance, rules.min_importance, item.key)
+        min_importance = rules.min_importance or (self.settings.news_min_importance if is_news else 0)
+        if decision.importance < min_importance:
+            log.info("Not published (importance %d < %d): %s", decision.importance, min_importance, item.key)
+            return None
+        breaking = is_news and decision.breaking and decision.importance >= 9
+        if quiet and not breaking:
+            log.info("Not published (quiet hours, not breaking): %s", item.key)
             return None
 
         text = fit(remove_links_and_mentions(decision.post), limit)
@@ -154,9 +180,11 @@ class Pipeline:
             log.info("Rewrite too short, skipping %s", item.key)
             return None
 
-        message_id = await self.publisher.send_post(text, item.image)
+        silent = self.settings.silent_news and not breaking
+        message_id = await self.publisher.send_post(text, item.image, silent=silent)
         headline = text.splitlines()[0][:200]
-        self.storage.add_post(today, item.source, item.key, decision.category, headline, text, message_id)
+        category = "analysis" if not is_news else decision.category
+        self.storage.add_post(today, item.source, item.key, category, headline, text, message_id)
         self.published += 1
         log.info("Published (%s) from %s: %s", decision.category, item.source, headline)
         return message_id or 0
