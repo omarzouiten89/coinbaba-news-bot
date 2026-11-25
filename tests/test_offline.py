@@ -149,6 +149,19 @@ class LessonTests(unittest.TestCase):
         self.assertTrue(render_card("ما هو التضخم؟").startswith(b"\xff\xd8"))  # a JPEG
 
 
+class MorningTests(unittest.TestCase):
+    def test_day_look(self):
+        from bot.morning import day_look
+        self.assertEqual(day_look(datetime(2026, 11, 27))["theme"], "friday")    # Friday
+        self.assertEqual(day_look(datetime(2026, 11, 28))["theme"], "weekend")   # Saturday
+        self.assertEqual(day_look(datetime(2026, 11, 25))["title"], "ملخص الصباح")
+
+    def test_theme_cards_render(self):
+        from bot.card import render_card
+        for theme in ("friday", "weekend"):
+            self.assertTrue(render_card("عنوان", "صباح الخير", "@x", "السبت 28 نوفمبر", theme).startswith(b"\xff\xd8"))
+
+
 class PollTests(unittest.TestCase):
     def test_parse_poll(self):
         from bot.rewriter import parse_poll

@@ -49,6 +49,16 @@ def arabic_date(d: datetime) -> str:
     return f"{AR_DAYS[d.weekday()]} {d.day} {AR_MONTHS[d.month - 1]}"
 
 
+def day_look(d: datetime) -> dict:
+    """Card title, theme and post header of the day: Friday and Saturday get their own look."""
+    if d.weekday() == 4:
+        return {"title": "جمعة طيبة", "theme": "friday", "header": "☀️ <b>صباح الخير وجمعة طيبة</b> 🌙"}
+    if d.weekday() == 5:
+        return {"title": "نهاية أسبوع موفقة", "theme": "weekend",
+                "header": "☀️ <b>صباح الخير ونهاية أسبوع موفقة</b> ☕"}
+    return {"title": "ملخص الصباح", "theme": "", "header": "☀️ <b>ملخص الصباح</b>"}
+
+
 def _fmt(price: float, decimals: int) -> str:
     return f"{price:,.{decimals}f}"
 
@@ -108,11 +118,8 @@ def _clean_headline(h: str) -> str:
 async def build_brief(settings, rewriter, pipeline) -> str:
     tz = ZoneInfo(settings.timezone)
     now = datetime.now(tz)
-    if now.weekday() == 4:  # Friday
-        header = f"☀️ <b>صباح الخير وجمعة طيبة</b> 🌙  |  {html.escape(arabic_date(now))}"
-    else:
-        header = f"☀️ <b>ملخص الصباح</b>  |  {html.escape(arabic_date(now))}"
-    parts = [header, SEP]
+    look = day_look(now)
+    parts = [f"{look['header']}  |  {html.escape(arabic_date(now))}", SEP]
     async with httpx.AsyncClient(timeout=20) as client:
         prices: List[str] = []
         try:
@@ -127,7 +134,10 @@ async def build_brief(settings, rewriter, pipeline) -> str:
             except Exception as exc:
                 log.info("Price %s failed: %s", symbol, exc)
         if prices:
-            parts += ["📊 <b>الأسواق الآن</b>", "", *prices, SEP]
+            parts += ["📊 <b>الأسواق الآن</b>", "", *prices]
+            if now.weekday() >= 5:
+                parts += ["", "ℹ️ الأسواق التقليدية مغلقة اليوم، والعملات الرقمية تتداول على مدار الساعة."]
+            parts.append(SEP)
 
         try:
             events = await todays_events(client, tz, now.date())
@@ -195,17 +205,17 @@ async def post_due_brief(settings, storage, rewriter, publisher, pipeline) -> bo
         return False
     key = f"brief:{now:%Y-%m-%d}:0"
     # Hybrid safety: the other bot may have posted it already.
-    if any(("ملخص الصباح" in h or "جمعة طيبة" in h) and arabic_date(now) in h
+    if any(("ملخص الصباح" in h or "صباح الخير" in h) and arabic_date(now) in h
            for h in await pipeline.published_headlines()):
         storage.set(key, "posted-by-other")
         return False
     text = await build_brief(settings, rewriter, pipeline)
     while visible_length(text) > 1024 and SEP in text:  # too long for a photo caption: drop the agenda
         text = text.rsplit(SEP, 2)[0] + SEP + "\n" + text.rsplit("\n", 1)[-1]
-    friday = now.weekday() == 4
-    card = await asyncio.to_thread(render_card, "جمعة طيبة" if friday else "ملخص الصباح", "صباح الخير",
+    look = day_look(now)
+    card = await asyncio.to_thread(render_card, look["title"], "صباح الخير",
                                    f"@{settings.target_channel_public}" if settings.target_channel_public else "",
-                                   arabic_date(now), "friday" if friday else "")
+                                   arabic_date(now), look["theme"])
     await publisher.send_post(text, card, is_html=True)
     storage.set(key, "1")
     plain = html.unescape(re.sub(r"<[^>]+>", "", text))

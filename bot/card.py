@@ -193,11 +193,44 @@ def _friday_layer() -> Image.Image:
     return layer
 
 
+def _weekend_layer() -> Image.Image:
+    """Relaxed Saturday look: a rising sun with soft rays, and a coffee cup with steam."""
+    import math
+    layer = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    gold = (*GOLD, 255)
+
+    # Sun with rays (upper middle)
+    cx, cy, r = 620, 205, 38
+    for i in range(12):
+        a = i * math.pi / 6
+        d.line([(cx + (r + 12) * math.cos(a), cy + (r + 12) * math.sin(a)),
+                (cx + (r + 30) * math.cos(a), cy + (r + 30) * math.sin(a))], fill=gold, width=5)
+    d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=gold)
+
+    # Coffee cup with steam (bottom right), faint
+    m = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    k = ImageDraw.Draw(m)
+    c = (*GOLD, 255)
+    k.rounded_rectangle((790, 800, 920, 890), radius=22, fill=c)       # cup
+    k.ellipse((900, 815, 960, 870), outline=c, width=12)               # handle
+    k.rounded_rectangle((760, 886, 960, 900), radius=7, fill=c)        # saucer
+    for x in (820, 855, 890):                                          # steam
+        k.arc((x - 14, 705, x + 14, 745), 90, 270, fill=c, width=6)
+        k.arc((x - 14, 740, x + 14, 780), 270, 90, fill=c, width=6)
+    m.putalpha(m.getchannel("A").point(lambda a: int(a * 0.35)))
+    layer.alpha_composite(m)
+    return layer
+
+
+THEMES = {"friday": _friday_layer, "weekend": _weekend_layer}
+
+
 def render_card(title: str, badge: str = "معلومة اليوم", handle: str = "@financemante",
                 subtitle: str = "", theme: str = "") -> bytes:
     img = _background()
-    if theme == "friday":
-        fl = _friday_layer()
+    if theme in THEMES:
+        fl = THEMES[theme]()
         img.paste(fl, (0, 0), fl)
     draw = ImageDraw.Draw(img)
 
