@@ -163,6 +163,8 @@ class PollTests(unittest.TestCase):
         from bot.polls import theme_for_day
         kinds = {theme_for_day(date(2026, 11, d))[0] for d in range(1, 5)}
         self.assertEqual(kinds, {"bitcoin", "gold", "event", "market"})
+        day = date(2026, 11, 25)
+        self.assertNotEqual(theme_for_day(day, 0, 2), theme_for_day(day, 1, 2))  # 2 polls, 2 themes
 
 
 class PipelineTests(unittest.TestCase):

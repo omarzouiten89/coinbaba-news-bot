@@ -30,8 +30,8 @@ THEMES = [
 ]
 
 
-def theme_for_day(day) -> tuple:
-    return THEMES[day.toordinal() % len(THEMES)]
+def theme_for_day(day, slot: int = 0, slots_per_day: int = 1) -> tuple:
+    return THEMES[(day.toordinal() * slots_per_day + slot) % len(THEMES)]
 
 
 async def poll_already_in_channel(public_name: str, since_utc: datetime) -> bool:
@@ -68,7 +68,7 @@ async def post_due_poll(settings, storage, rewriter, publisher, pipeline=None) -
     if await poll_already_in_channel(settings.target_channel_public.lstrip("@"), slot_start - timedelta(minutes=1)):
         storage.set(key, "posted-by-other")
         return False
-    kind, topic = theme_for_day(now.date())
+    kind, topic = theme_for_day(now.date(), slot, len(times))
     if kind == "event" and pipeline is not None:
         headlines = [h for h in await pipeline.published_headlines() if not h.startswith("📚")][:15]
         if headlines:
