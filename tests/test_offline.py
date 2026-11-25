@@ -124,6 +124,30 @@ class PromoTests(unittest.TestCase):
         self.assertFalse(is_due(datetime(2026, 11, 24, 23, 0), "20:00", "2026-11-24"))
 
 
+class LessonTests(unittest.TestCase):
+    def test_due_slot(self):
+        from bot.lessons import due_slot
+        times = ["10:00", "15:00", "21:00"]
+        self.assertIsNone(due_slot(datetime(2026, 11, 25, 9, 59), times, set()))
+        self.assertEqual(due_slot(datetime(2026, 11, 25, 10, 5), times, set()), 0)
+        self.assertIsNone(due_slot(datetime(2026, 11, 25, 10, 5), times, {"2026-11-25:0"}))
+        self.assertIsNone(due_slot(datetime(2026, 11, 25, 14, 0), times, set()))  # missed by > 3h
+        self.assertEqual(due_slot(datetime(2026, 11, 25, 21, 30), times, {"2026-11-25:0"}), 2)
+
+    def test_topics_rotate_without_repeat_in_a_day(self):
+        from datetime import date
+        from bot.lessons import slot_topic
+        day = date(2026, 11, 25)
+        titles = {slot_topic(day, i, 3)[0] for i in range(3)}
+        self.assertEqual(len(titles), 3)
+        self.assertNotEqual(slot_topic(day, 0, 3), slot_topic(date(2026, 11, 26), 0, 3))
+
+    def test_card_renders(self):
+        from bot.card import card_title, render_card
+        self.assertEqual(card_title("ما الفرق بين الفوري (Spot) والآجلة (Futures)؟"), "ما الفرق بين الفوري والآجلة؟")
+        self.assertTrue(render_card("ما هو التضخم؟").startswith(b"\xff\xd8"))  # a JPEG
+
+
 class PipelineTests(unittest.TestCase):
     def run_async(self, coro):
         return asyncio.run(coro)

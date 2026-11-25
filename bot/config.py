@@ -33,6 +33,7 @@ class Settings:
     dry_run: bool = False
     data_dir: Path = BASE_DIR / "data"
     promo: dict = field(default_factory=dict)
+    lessons: dict = field(default_factory=dict)
 
 
 def _int_or_none(value: Optional[str]) -> Optional[int]:
@@ -88,4 +89,5 @@ def load_settings(config_path: Optional[Path] = None) -> Settings:
         dry_run=os.getenv("DRY_RUN", "").strip() in ("1", "true", "yes"),
         data_dir=data_dir,
         promo=dict(cfg.get("daily_promo") or {}),
+        lessons=dict(cfg.get("daily_lessons") or {}),
     )

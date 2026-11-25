@@ -86,6 +86,10 @@ class Storage:
         row = self.db.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
         return row[0] if row else None
 
+    def keys_with_prefix(self, prefix: str) -> List[str]:
+        rows = self.db.execute("SELECT key FROM kv WHERE key LIKE ?", (prefix + "%",)).fetchall()
+        return [r[0] for r in rows]
+
     def set(self, key: str, value: str) -> None:
         self.db.execute("INSERT OR REPLACE INTO kv(key, value) VALUES (?, ?)", (key, value))
         self.db.commit()

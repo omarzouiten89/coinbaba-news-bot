@@ -53,6 +53,11 @@ async def run_bot(settings) -> None:
         from bot.heartbeat import heartbeat_loop
         tasks.append(asyncio.create_task(heartbeat_loop(BASE_DIR)))
 
+    if settings.lessons.get("enabled"):
+        from bot.lessons import lessons_loop
+        tasks.append(asyncio.create_task(
+            lessons_loop(settings, storage, rewriter, publisher, pipeline, alert)))
+
     if settings.promo.get("enabled"):
         from bot.promo import promo_loop
         tasks.append(asyncio.create_task(
@@ -117,6 +122,12 @@ async def run_once(settings) -> None:
                     log.warning("Channel %s failed: %s", name, exc)
         log.info("%d new item(s) to check", pipeline.queue.qsize())
         await pipeline.drain_once()
+        if settings.lessons.get("enabled"):
+            from bot.lessons import post_due_lesson
+            try:
+                await post_due_lesson(settings, storage, rewriter, publisher, pipeline)
+            except Exception as exc:
+                log.warning("Lesson failed (will retry next run): %s", exc)
         log.info("Run finished: %d published", pipeline.published)
     finally:
         await pipeline.close()

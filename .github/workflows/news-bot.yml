@@ -42,6 +42,10 @@ jobs:
       - run: pip install -r requirements.txt
         if: steps.mac.outputs.alive != 'true'
 
+      - name: Arabic font for the lesson card
+        if: steps.mac.outputs.alive != 'true'
+        run: sudo apt-get install -y -qq fonts-noto-core fonts-dejavu-core >/dev/null
+
       # The bot's memory (what it already saw / published) is kept between runs.
       - name: Restore memory
         if: steps.mac.outputs.alive != 'true'

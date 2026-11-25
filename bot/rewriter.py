@@ -67,6 +67,21 @@ Reply with JSON only:
   "post": "the Arabic post, or empty string if not publishing"}}"""
 
 
+LESSON_PROMPT = """You write the daily educational post of COINBABA, an Arabic Telegram channel about investing
+and financial markets, for beginners and intermediate readers.
+
+Write ONE short lesson in Modern Standard Arabic (فصحى) about the topic you receive:
+- First line: "📚 " followed by the lesson title, written as a short question or statement in Arabic.
+- Then 3 to 5 short lines that explain the idea simply and accurately, with one concrete example
+  (numbers are welcome). Use 2-4 fitting emojis in the body, not on every line.
+- One last line starting with "💡 الخلاصة:" with the key takeaway in one sentence.
+- End with 2 or 3 hashtags, always including #معلومة_اليوم.
+- Educational only: no buy/sell advice, no price predictions, no links, no @usernames.
+- Correct financial Arabic terms; you may add the English term in parentheses once, e.g. (ETF).
+- Total length must not exceed {max_chars} characters.
+Reply with the post text only."""
+
+
 @dataclass
 class Decision:
     publish: bool
@@ -135,6 +150,25 @@ class GeminiRewriter:
             "contents": [{"role": "user", "parts": [{"text": build_user_prompt(text, has_image, recent_headlines)}]}],
             "generationConfig": {"responseMimeType": "application/json", "temperature": 0.5},
         }
+        return await self._generate(body, parse_decision)
+
+    async def write_lesson(self, topic: str, max_chars: int = 850) -> str:
+        """Writes one short educational post (plain Arabic text) about `topic`."""
+        body = {
+            "systemInstruction": {"parts": [{"text": LESSON_PROMPT.format(max_chars=max_chars)}]},
+            "contents": [{"role": "user", "parts": [{"text": f"Topic: {topic}"}]}],
+            "generationConfig": {"temperature": 0.7},
+        }
+
+        def parse(text: str) -> str:
+            text = text.strip().strip("`").strip()
+            if len(text) < 80:
+                raise ValueError("lesson too short")
+            return text
+
+        return await self._generate(body, parse)
+
+    async def _generate(self, body: dict, parse):
         delays = [15, 45, 90]
         last_error: Optional[str] = None
         for attempt in range(len(delays) + 1):
@@ -151,7 +185,7 @@ class GeminiRewriter:
                     continue
                 if resp.status_code == 200:
                     try:
-                        return parse_decision(_extract_text(resp.json()))
+                        return parse(_extract_text(resp.json()))
                     except (ValueError, RewriterError) as exc:
                         # Broken or cut JSON from the model: ask again (next model) instead of losing the news.
                         last_error = f"{model}: bad JSON reply ({exc.__class__.__name__})"
