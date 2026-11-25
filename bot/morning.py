@@ -57,7 +57,7 @@ def price_line(emoji: str, name: str, value: str, pct: Optional[float]) -> str:
     """'₿ <b>البيتكوين</b>:  $58,543   🔴 -2.9%' with the numbers kept left-to-right."""
     line = f"{emoji} <b>{html.escape(name)}</b>:  {LTR.format(html.escape(value))}"
     if pct is not None:
-        line += f"   {'🟢' if pct >= 0 else '🔴'} {LTR.format(f'{pct:+.1f}%')}"
+        line += f"  {LTR.format(f'({pct:+.1f}%)')}"
     return line
 
 
