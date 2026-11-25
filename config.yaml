@@ -14,6 +14,13 @@ telegram_channels:
   - "@WatcherGuru"
   - "@knowMoreCrypt00"
   - "@CoinDeskGlobal"
+  # --- قنوات التحليل (كتترجم للعربية، والشارت كيتنشر معاها) ---
+  - name: "@glassnode"
+    kind: analysis
+    daily_max: 3
+  - name: "@cryptoquant_official"
+    kind: analysis
+    daily_max: 2
 
 # المواقع الإخبارية (RSS)
 rss_feeds:
@@ -23,6 +30,11 @@ rss_feeds:
     min_importance: 8     # وخاصو يكون مهم بزاف (من 10)
   - name: CoinDesk
     url: https://www.coindesk.com/arc/outboundfeeds/rss/
+  - name: FXStreet Gold
+    url: https://www.fxstreet.com/rss/analysis
+    kind: analysis
+    daily_max: 2
+    keywords: ["gold", "xau"]   # غير تحليلات الذهب
 
 # أقصى عدد ديال المنشورات فالنهار (توقيت الإمارات)
 daily_limit: 60

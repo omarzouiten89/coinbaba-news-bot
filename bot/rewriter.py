@@ -54,7 +54,8 @@ STEP 2 - if publishing, write the post in Modern Standard Arabic (فصحى), pro
 - No links, no @usernames, no calls to join or follow anything.
 - If real news is mixed with an ad or promotion in the same post, keep ONLY the news and drop every
   trace of the ad (brand being promoted, offer, link, call to action).
-- End with 2 or 3 relevant hashtags (Arabic words or tickers such as #بيتكوين #BTC).
+- End with 3 to 5 hashtags that people actually search for, mixing Arabic words and English tickers/terms,
+  e.g. #بيتكوين #BTC #العملات_الرقمية #الذهب #XAUUSD #الأسهم_الأمريكية #الفيدرالي. Use underscores, no spaces.
 - Use correct financial Arabic terms (e.g. ICO = الطرح الأولي للعملات الرقمية, IPO = الطرح العام الأولي,
   ETF = صناديق المؤشرات المتداولة). Before answering, proofread the Arabic for spelling mistakes
   (including inside hashtags).
@@ -93,7 +94,7 @@ Write ONE short lesson in Modern Standard Arabic (فصحى) about the topic you 
 - Then 3 to 5 short lines that explain the idea simply and accurately, with one concrete example
   (numbers are welcome). Use 2-4 fitting emojis in the body, not on every line.
 - One last line starting with "💡 الخلاصة:" with the key takeaway in one sentence.
-- End with 2 or 3 hashtags, always including #معلومة_اليوم.
+- End with 3 to 5 searchable hashtags (Arabic and English terms), always including #معلومة_اليوم.
 - Educational only: no buy/sell advice, no price predictions, no links, no @usernames.
 - Correct financial Arabic terms; you may add the English term in parentheses once, e.g. (ETF).
 - Total length must not exceed {max_chars} characters.
