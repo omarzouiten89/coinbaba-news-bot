@@ -3,8 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import datetime
-from typing import Awaitable, Callable, Optional
+from typing import Awaitable, Callable, List, Optional
 
 import httpx
 
@@ -38,6 +39,25 @@ class Pipeline:
         self._http = httpx.AsyncClient(timeout=30)
         self.published = 0
         self._retries: dict = {}
+        self._channel_cache: tuple = (-1e9, [])
+
+    async def published_headlines(self) -> List[str]:
+        """Headlines already in the channel: from our own memory AND from the channel's public page,
+        so the Mac bot and the GitHub bot never repeat what the other one posted (hybrid mode)."""
+        own = self.storage.recent_headlines()
+        public = (self.settings.target_channel_public or "").strip().lstrip("@")
+        if not public:
+            return own
+        now = time.monotonic()
+        if now - self._channel_cache[0] > 120:
+            try:
+                from .web_channel_source import fetch_channel
+                items = await fetch_channel(self._http, public)
+                self._channel_cache = (now, [i.text.splitlines()[0][:200] for i in items[-25:]])
+            except Exception as exc:
+                log.info("Could not read own channel page: %s", exc)
+        merged = list(dict.fromkeys(self._channel_cache[1][::-1] + own))
+        return merged[:45]
 
     def local_date(self) -> str:
         return datetime.now(self.tz).strftime("%Y-%m-%d")
@@ -113,7 +133,7 @@ class Pipeline:
         limit = CAPTION_LIMIT if has_image else MESSAGE_LIMIT
         target_chars = 950 if has_image else 1800
         decision = await self.rewriter.process(
-            item.text, has_image, self.storage.recent_headlines(), target_chars
+            item.text, has_image, await self.published_headlines(), target_chars
         )
         if not decision.publish or decision.duplicate:
             log.info("Not published (%s): %s", decision.reason or "rejected", item.key)

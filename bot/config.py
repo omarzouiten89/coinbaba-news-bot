@@ -21,6 +21,7 @@ class Settings:
     gemini_model: str
     owner_chat_id: Optional[int]
     target_channel: Union[str, int, None]
+    target_channel_public: str = ""
     telegram_channels: List[str] = field(default_factory=list)
     rss_feeds: List[dict] = field(default_factory=list)
     daily_limit: int = 60
@@ -75,6 +76,7 @@ def load_settings(config_path: Optional[Path] = None) -> Settings:
         gemini_model=os.getenv("GEMINI_MODEL", "").strip() or "gemini-flash-latest,gemini-3.5-flash,gemini-flash-lite-latest,gemini-3.5-flash-lite",
         owner_chat_id=_int_or_none(os.getenv("OWNER_CHAT_ID")),
         target_channel=_channel_ref(cfg.get("target_channel")),
+        target_channel_public=str(cfg.get("target_channel_public") or ""),
         telegram_channels=[str(c).strip() for c in (cfg.get("telegram_channels") or []) if str(c).strip()],
         rss_feeds=list(cfg.get("rss_feeds") or []),
         daily_limit=int(cfg.get("daily_limit", 60)),

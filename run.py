@@ -12,7 +12,7 @@ import logging
 import sys
 from logging.handlers import RotatingFileHandler
 
-from bot.config import load_settings
+from bot.config import BASE_DIR, load_settings
 from bot.pipeline import Pipeline
 from bot.publisher import Alerter, Publisher
 from bot.rewriter import FakeRewriter, GeminiRewriter
@@ -48,6 +48,10 @@ async def run_bot(settings) -> None:
     if settings.rss_feeds:
         tasks.append(asyncio.create_task(
             rss_loop(settings.rss_feeds, storage, pipeline.submit, settings.rss_interval_seconds, alert)))
+
+    if (BASE_DIR / ".git").exists() and not settings.dry_run:
+        from bot.heartbeat import heartbeat_loop
+        tasks.append(asyncio.create_task(heartbeat_loop(BASE_DIR)))
 
     if settings.promo.get("enabled"):
         from bot.promo import promo_loop

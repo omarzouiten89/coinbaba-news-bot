@@ -21,15 +21,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Hybrid mode: if the Mac bot said "I'm alive" less than 15 minutes ago, GitHub does nothing.
+      - name: Is the Mac bot running?
+        id: mac
+        run: |
+          if git fetch --quiet --depth=1 origin heartbeat 2>/dev/null; then
+            age=$(( $(date +%s) - $(git log -1 --format=%ct FETCH_HEAD) ))
+            echo "Last Mac heartbeat: ${age}s ago"
+            if [ "$age" -lt 900 ]; then echo "alive=true" >> "$GITHUB_OUTPUT"; echo "Mac is running: skipping this run."; fi
+          else
+            echo "No Mac heartbeat found"
+          fi
+
       - uses: actions/setup-python@v5
+        if: steps.mac.outputs.alive != 'true'
         with:
           python-version: "3.11"
           cache: pip
 
       - run: pip install -r requirements.txt
+        if: steps.mac.outputs.alive != 'true'
 
       # The bot's memory (what it already saw / published) is kept between runs.
       - name: Restore memory
+        if: steps.mac.outputs.alive != 'true'
         uses: actions/cache/restore@v4
         with:
           path: data/bot.db
@@ -37,6 +52,7 @@ jobs:
           restore-keys: bot-db-
 
       - name: Check sources and publish
+        if: steps.mac.outputs.alive != 'true'
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -46,7 +62,7 @@ jobs:
         run: python run.py once
 
       - name: Save memory
-        if: always()
+        if: always() && steps.mac.outputs.alive != 'true'
         uses: actions/cache/save@v4
         with:
           path: data/bot.db
