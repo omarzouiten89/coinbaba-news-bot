@@ -36,6 +36,11 @@ LATIN_FONT_CANDIDATES = [
 def _latin_font(size: int) -> ImageFont.FreeTypeFont:
     for path in LATIN_FONT_CANDIDATES:
         if path.exists():
+            if path.suffix == ".ttc":  # Helvetica.ttc: face 1 is Bold
+                try:
+                    return ImageFont.truetype(str(path), size, index=1)
+                except OSError:
+                    pass
             return ImageFont.truetype(str(path), size)
     return ImageFont.load_default()
 
@@ -45,7 +50,6 @@ def card_title(text: str) -> str:
     import re
     text = re.sub(r"\(\s*[A-Za-z0-9 .&/+-]+\s*\)", "", text)
     text = re.sub(r"[A-Za-z]+", "", text)
-    text = text.translate(str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩"))  # Arabic digits exist in every Arabic font
     return " ".join(text.split()).replace(" ؟", "؟")
 
 
@@ -66,11 +70,34 @@ def _ar(text: str) -> str:
     return get_display(arabic_reshaper.reshape(text))
 
 
-def _wrap(text: str, font: ImageFont.FreeTypeFont, max_width: int, draw: ImageDraw.ImageDraw) -> List[str]:
+def _runs(visual: str) -> List[tuple]:
+    """Splits a visual-order line into (is_digit_run, text) pieces: digits use the Latin font."""
+    import re
+    return [(bool(re.fullmatch(r"[0-9.,%$:+\-]+", part)), part)
+            for part in re.split(r"([0-9][0-9.,%$:+\-]*)", visual) if part]
+
+
+def _mixed_width(draw: ImageDraw.ImageDraw, visual: str, ar_font, latin_font) -> float:
+    return sum(draw.textlength(t, font=latin_font if d else ar_font) for d, t in _runs(visual))
+
+
+def _draw_mixed_right(draw: ImageDraw.ImageDraw, right: int, y: int, visual: str, ar_font, latin_font, fill) -> None:
+    """Draws a line ending at `right`, Arabic glyphs with the Arabic font and 0-9 with the Latin font."""
+    x = right - _mixed_width(draw, visual, ar_font, latin_font)
+    baseline = y + ar_font.getmetrics()[0]  # both fonts sit on the same baseline
+    for is_digit, text in _runs(visual):
+        font = latin_font if is_digit else ar_font
+        draw.text((x, baseline), text, font=font, fill=fill, anchor="ls")
+        x += draw.textlength(text, font=font)
+
+
+def _wrap(text: str, font: ImageFont.FreeTypeFont, max_width: int, draw: ImageDraw.ImageDraw,
+          latin_font=None) -> List[str]:
+    latin_font = latin_font or font
     lines, current = [], ""
     for word in text.split():
         trial = f"{current} {word}".strip()
-        if draw.textlength(_ar(trial), font=font) <= max_width or not current:
+        if _mixed_width(draw, _ar(trial), font, latin_font) <= max_width or not current:
             current = trial
         else:
             lines.append(current)
@@ -149,7 +176,8 @@ def render_card(title: str, badge: str = "معلومة اليوم", handle: str 
     size = 76
     while True:
         title_font = _font(size)
-        lines = _wrap(title, title_font, area_width, draw)
+        digit_font = _latin_font(int(size * 0.92))
+        lines = _wrap(title, title_font, area_width, draw, digit_font)
         if len(lines) <= 4 or size <= 48:
             break
         size -= 6
@@ -157,7 +185,7 @@ def render_card(title: str, badge: str = "معلومة اليوم", handle: str 
     block_h = line_h * len(lines)
     y = 470 - block_h // 2
     for line in lines:
-        draw.text((area_right, y), _ar(line), font=title_font, fill=WHITE, anchor="ra")
+        _draw_mixed_right(draw, area_right, y, _ar(line), title_font, digit_font, WHITE)
         y += line_h
     draw.rounded_rectangle((area_right - 150, y + 18, area_right, y + 26), radius=4, fill=GOLD)
 
