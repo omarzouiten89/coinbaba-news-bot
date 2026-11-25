@@ -195,6 +195,24 @@ def _signature(html_text: str) -> str:
     return re.sub(r"\W+", "", plain)[:60]
 
 
+def _words(html_text: str) -> set:
+    plain = htmllib.unescape(re.sub(r"<[^>]+>", " ", html_text or "")).lower()
+    return {w for w in re.findall(r"[\w٪%.]+", plain) if len(w) > 1}
+
+
+def is_duplicate(html_text: str, recent_texts: List[str], threshold: float = 0.6) -> bool:
+    """Same post already in the channel? Exact start match, or 60%+ of the words in common."""
+    sig = _signature(html_text)
+    words = _words(html_text)
+    for other in recent_texts:
+        if sig and len(sig) >= 15 and sig == _signature(other):
+            return True
+        ow = _words(other)
+        if len(words) >= 8 and len(ow) >= 8 and len(words & ow) / min(len(words), len(ow)) >= threshold:
+            return True
+    return False
+
+
 def mirror_footer(cfg: dict) -> str:
     link = htmllib.escape(str(cfg.get("link") or ""))
     label = htmllib.escape(str(cfg.get("footer") or "👈 سجّل الآن من هنا").rstrip(":"))
@@ -229,23 +247,28 @@ async def run_mirror(cfg: dict, bot_token: str, storage, silent: bool = True, ba
             storage.set(key, str(newest))  # nothing to copy, move on
     if limit:
         posts = posts[:limit]
-    # Hybrid safety (Mac + GitHub): skip posts whose text is already in the target channel.
-    already = set()
+    # No duplicates: skip posts already in the target channel (from this source, the other source,
+    # or the other bot in hybrid Mac + GitHub mode). Compared on the whole text, not only the start.
+    recent: List[str] = []
     target_public = str(cfg.get("target") or "").lstrip("@")
-    if posts and not backfill and not target_public.lstrip("-").isdigit():
-        async with httpx.AsyncClient(timeout=30) as client:
-            page = (await client.get(f"https://t.me/s/{target_public}", headers=HEADERS,
-                                     follow_redirects=True)).text
-        already = {_signature(tp.html_text) for tp in parse_page(target_public, page, keep)}
+    if posts and not target_public.lstrip("-").isdigit():
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                page = (await client.get(f"https://t.me/s/{target_public}", headers=HEADERS,
+                                         follow_redirects=True)).text
+            recent = [tp.html_text for tp in parse_page(target_public, page, keep) if tp.html_text]
+        except httpx.HTTPError as exc:
+            log.info("Could not read target channel for duplicates: %s", exc)
     pub = MirrorPublisher(bot_token, cfg["target"], mirror_footer(cfg))
     done = 0
     try:
         for p in posts:
-            sig = _signature(p.html_text)
-            if sig and any(sig in a for a in already):
+            if p.html_text and is_duplicate(p.html_text, recent):
+                log.info("Mirror: post %s/%s is a duplicate, skipped", source, p.msg_id)
                 storage.set(key, str(p.msg_id))
                 continue
             await pub.post(p, silent)
+            recent.append(p.html_text)
             storage.set(key, str(p.msg_id))
             done += 1
             await asyncio.sleep(delay)

@@ -162,6 +162,24 @@ class MorningTests(unittest.TestCase):
             self.assertTrue(render_card("عنوان", "صباح الخير", "@x", "السبت 28 نوفمبر", theme).startswith(b"\xff\xd8"))
 
 
+class MirrorTests(unittest.TestCase):
+    def test_links_cleaned(self):
+        from bot.mirror import clean_html
+        out = clean_html('A <a href="https://zoom.us/j/1">https://zoom.us/j/1</a> B '
+                         '<a href="https://hashnet.ai/r/x">hashnet.ai/r/x</a> <a href="https://t.me/x">@x</a>', ["zoom.us"])
+        self.assertIn("zoom.us/j/1", out)
+        self.assertNotIn("hashnet.ai", out)
+        self.assertNotIn("@x", out)
+
+    def test_duplicates(self):
+        from bot.mirror import is_duplicate
+        a = "🛠 طازج من المناجم 🏹 0.38٪ من البيتكوين 💥 6.74٪ حتى الآن في شهر نوفمبر اليوم السادس عشر وقد تجاوزنا"
+        b = "طازج من المناجم! 0.38٪ من البيتكوين، 6.74٪ حتى الآن في شهر نوفمبر اليوم السادس عشر 🔥 وقد تجاوزنا الهدف"
+        c = "اجتماع اليوم على زوم مع فريق الإدارة لشرح منتج التأجير الجديد وطريقة السحب والإيداع خطوة بخطوة"
+        self.assertTrue(is_duplicate(b, [a]))
+        self.assertFalse(is_duplicate(c, [a]))
+
+
 class PollTests(unittest.TestCase):
     def test_parse_poll(self):
         from bot.rewriter import parse_poll
