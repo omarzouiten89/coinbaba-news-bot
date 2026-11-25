@@ -12,7 +12,7 @@ import feedparser
 import httpx
 
 from .ingest import ingest
-from .models import Item
+from .models import Item, SourceRules
 from .storage import Storage
 from .textutils import strip_html
 
@@ -120,5 +120,6 @@ async def rss_loop(feeds: List[dict], storage: Storage, submit: Callable[[Item],
                         await alert(f"المصدر {name} ما كيجاوبش (5 محاولات متتالية): {exc}")
                     continue
                 failures[name] = 0
-                await ingest(storage, f"seeded:{name}", f"Feed {name}", items, submit)
+                await ingest(storage, f"seeded:{name}", f"Feed {name}", items, submit,
+                             SourceRules.from_config(feed))
             await asyncio.sleep(interval)

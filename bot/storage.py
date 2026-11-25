@@ -74,6 +74,10 @@ class Storage:
     def count_posts_on(self, local_date: str) -> int:
         return self.db.execute("SELECT COUNT(*) FROM posts WHERE local_date=?", (local_date,)).fetchone()[0]
 
+    def count_posts_by_source(self, local_date: str, source: str) -> int:
+        return self.db.execute("SELECT COUNT(*) FROM posts WHERE local_date=? AND source=?",
+                               (local_date, source)).fetchone()[0]
+
     def recent_headlines(self, hours: int = 24, limit: int = 40) -> List[str]:
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
         rows = self.db.execute(

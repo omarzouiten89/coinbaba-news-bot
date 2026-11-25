@@ -74,11 +74,13 @@ async def run_bot(settings) -> None:
         from bot.web_channel_source import web_channels_loop
         tasks.append(asyncio.create_task(web_channels_loop(
             settings.telegram_channels, storage, pipeline.submit, settings.channel_check_seconds, alert)))
-        log.info("Watching %d public channel(s) through t.me/s", len(settings.telegram_channels))
+        log.info("Watching %d public channel(s) through t.me/s", len(settings.telegram_channels))  # noqa
     elif settings.telegram_channels:
         from bot.telegram_source import make_client, start_listener
         client = make_client(settings.data_dir, settings.api_id, settings.api_hash)
-        count = await start_listener(client, settings.telegram_channels, pipeline.submit, alert)
+        from bot.ingest import source_entries
+        count = await start_listener(client, [r for r, _ in source_entries(settings.telegram_channels)],
+                                     pipeline.submit, alert)
         log.info("Listening to %d Telegram channel(s)", count)
         tasks.append(asyncio.create_task(client.run_until_disconnected()))
 
@@ -100,7 +102,8 @@ async def run_bot(settings) -> None:
 async def run_once(settings) -> None:
     """GitHub Actions mode: check every source one time, publish what is new, then exit."""
     import httpx
-    from bot.ingest import ingest
+    from bot.ingest import ingest, source_entries
+    from bot.models import SourceRules
     from bot.web_channel_source import channel_username, fetch_channel
     log = logging.getLogger("once")
     storage = Storage(settings.data_dir / "bot.db")
@@ -114,14 +117,15 @@ async def run_once(settings) -> None:
             for feed in settings.rss_feeds:
                 try:
                     items = await fetch_feed(client, feed)
-                    await ingest(storage, f"seeded:{feed['name']}", f"Feed {feed['name']}", items, pipeline.submit)
+                    await ingest(storage, f"seeded:{feed['name']}", f"Feed {feed['name']}", items, pipeline.submit,
+                                 SourceRules.from_config(feed))
                 except Exception as exc:
                     log.warning("Feed %s failed: %s", feed["name"], exc)
-            for ref in settings.telegram_channels:
+            for ref, rules in source_entries(settings.telegram_channels):
                 name = channel_username(ref)
                 try:
                     items = await fetch_channel(client, name)
-                    await ingest(storage, f"seeded:tg:{name}", f"Channel @{name}", items, pipeline.submit)
+                    await ingest(storage, f"seeded:tg:{name}", f"Channel @{name}", items, pipeline.submit, rules)
                 except Exception as exc:
                     log.warning("Channel %s failed: %s", name, exc)
         log.info("%d new item(s) to check", pipeline.queue.qsize())

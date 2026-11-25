@@ -122,6 +122,13 @@ class Pipeline:
             return None
         if item.age_hours() > self.settings.max_item_age_hours:
             return None
+        rules = item.rules
+        if rules.keywords and not any(k in item.text.lower() for k in rules.keywords):
+            log.info("Skip (no keyword match) %s", item.key)
+            return None
+        if rules.daily_max is not None and self.storage.count_posts_by_source(today, item.source) >= rules.daily_max:
+            log.info("Skip (daily max %d reached for %s) %s", rules.daily_max, item.source, item.key)
+            return None
 
         # Image: Telegram items already carry bytes; for websites we download it.
         if item.image is None and not item.image_url and item.link:
@@ -133,10 +140,13 @@ class Pipeline:
         limit = CAPTION_LIMIT if has_image else MESSAGE_LIMIT
         target_chars = 950 if has_image else 1800
         decision = await self.rewriter.process(
-            item.text, has_image, await self.published_headlines(), target_chars
+            item.text, has_image, await self.published_headlines(), target_chars, kind=rules.kind
         )
         if not decision.publish or decision.duplicate:
             log.info("Not published (%s): %s", decision.reason or "rejected", item.key)
+            return None
+        if decision.importance < rules.min_importance:
+            log.info("Not published (importance %d < %d): %s", decision.importance, rules.min_importance, item.key)
             return None
 
         text = fit(remove_links_and_mentions(decision.post), limit)

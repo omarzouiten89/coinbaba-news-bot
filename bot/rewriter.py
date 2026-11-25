@@ -60,11 +60,29 @@ STEP 2 - if publishing, write the post in Modern Standard Arabic (فصحى), pro
   (including inside hashtags).
 - Total length must not exceed {max_chars} characters.
 
+Also rate "importance" from 1 to 10: how much this matters to investors (10 = major market-moving event such
+as a Fed decision or a big crash; 5 = normal market news; 1-3 = minor, local or niche story).
+
 Reply with JSON only:
-{{"publish": true/false, "duplicate": true/false, "breaking": true/false,
-  "category": "one of: crypto, gold, stocks, etf, economy, central_banks, other",
+{{"publish": true/false, "duplicate": true/false, "breaking": true/false, "importance": 1-10,
+  "category": "one of: crypto, gold, stocks, etf, economy, central_banks, analysis, other",
   "reason": "short English reason for your decision",
   "post": "the Arabic post, or empty string if not publishing"}}"""
+
+
+ANALYSIS_ADDON = """
+
+THIS SOURCE IS A MARKET ANALYSIS (on-chain data, charts, technical or fundamental analysis), not a news item.
+Different rules for this post:
+- Publish it if it contains a real analysis of Bitcoin, crypto, gold or the markets (data, levels, trends).
+  Still reject ads and promotions of the source's own product or service.
+- First line: "📊 تحليل: " followed by a short title.
+- Explain the analysis in clear Arabic in 2 to 4 short paragraphs: what the data or chart shows and what it
+  may mean. Keep every level, price, percentage and indicator exactly as in the source. Present it as the
+  reading of the data ("تشير البيانات إلى..."), never as a recommendation to buy or sell.
+- The image (chart) is published with the post, so you may refer to "الرسم البياني".
+- Before the hashtags add this line: "ℹ️ محتوى تحليلي للمعرفة وليس نصيحة استثمارية."
+- Use category "analysis"."""
 
 
 LESSON_PROMPT = """You write the daily educational post of COINBABA, an Arabic Telegram channel about investing
@@ -125,6 +143,7 @@ class Decision:
     breaking: bool = False
     category: str = "other"
     reason: str = ""
+    importance: int = 5
 
 
 def build_user_prompt(text: str, has_image: bool, recent_headlines: List[str]) -> str:
@@ -152,7 +171,15 @@ def parse_decision(raw: str) -> Decision:
         breaking=bool(data.get("breaking")),
         category=str(data.get("category") or "other"),
         reason=str(data.get("reason") or ""),
+        importance=_as_int(data.get("importance"), 5),
     )
+
+
+def _as_int(value, default: int) -> int:
+    try:
+        return max(1, min(10, int(value)))
+    except (TypeError, ValueError):
+        return default
 
 
 class RewriterError(Exception):
@@ -179,9 +206,11 @@ class GeminiRewriter:
             await asyncio.sleep(wait)
         self._last_call = time.monotonic()
 
-    async def process(self, text: str, has_image: bool, recent_headlines: List[str], max_chars: int) -> Decision:
+    async def process(self, text: str, has_image: bool, recent_headlines: List[str], max_chars: int,
+                      kind: str = "news") -> Decision:
+        system = SYSTEM_PROMPT.format(max_chars=max_chars) + (ANALYSIS_ADDON if kind == "analysis" else "")
         body = {
-            "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT.format(max_chars=max_chars)}]},
+            "systemInstruction": {"parts": [{"text": system}]},
             "contents": [{"role": "user", "parts": [{"text": build_user_prompt(text, has_image, recent_headlines)}]}],
             "generationConfig": {"responseMimeType": "application/json", "temperature": 0.5},
         }
@@ -264,7 +293,8 @@ class FakeRewriter:
     def __init__(self):
         self.calls = 0
 
-    async def process(self, text: str, has_image: bool, recent_headlines: List[str], max_chars: int) -> Decision:
+    async def process(self, text: str, has_image: bool, recent_headlines: List[str], max_chars: int,
+                      kind: str = "news") -> Decision:
         self.calls += 1
         first_line = text.strip().splitlines()[0][:120]
         if "VIP" in text or "promo" in text.lower():

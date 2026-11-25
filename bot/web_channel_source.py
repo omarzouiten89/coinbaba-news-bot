@@ -14,7 +14,7 @@ from typing import Awaitable, Callable, List
 
 import httpx
 
-from .ingest import ingest
+from .ingest import ingest, source_entries
 from .models import Item
 from .rss_source import HEADERS
 from .storage import Storage
@@ -70,13 +70,13 @@ async def fetch_channel(client: httpx.AsyncClient, name: str) -> List[Item]:
     return parse_channel_page(name, resp.text)
 
 
-async def web_channels_loop(channels: List[str], storage: Storage, submit: Callable[[Item], Awaitable[None]],
+async def web_channels_loop(channels: list, storage: Storage, submit: Callable[[Item], Awaitable[None]],
                             interval: int, alert: Callable[[str], Awaitable[None]]) -> None:
-    names = [channel_username(c) for c in channels]
-    failures = {n: 0 for n in names}
+    entries = [(channel_username(ref), rules) for ref, rules in source_entries(channels)]
+    failures = {n: 0 for n, _ in entries}
     async with httpx.AsyncClient(timeout=30) as client:
         while True:
-            for name in names:
+            for name, rules in entries:
                 try:
                     items = await fetch_channel(client, name)
                 except Exception as exc:
@@ -86,6 +86,6 @@ async def web_channels_loop(channels: List[str], storage: Storage, submit: Calla
                         await alert(f"القناة @{name} ما قدرتش نقراها (5 محاولات): {exc}")
                     continue
                 failures[name] = 0
-                await ingest(storage, f"seeded:tg:{name}", f"Channel @{name}", items, submit)
+                await ingest(storage, f"seeded:tg:{name}", f"Channel @{name}", items, submit, rules)
                 await asyncio.sleep(2)  # be gentle with Telegram
             await asyncio.sleep(interval)

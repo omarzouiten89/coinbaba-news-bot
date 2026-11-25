@@ -19,6 +19,8 @@ telegram_channels:
 rss_feeds:
   - name: Cointelegraph
     url: https://cointelegraph.com/rss
+    daily_max: 1          # غير خبر واحد فالنهار
+    min_importance: 8     # وخاصو يكون مهم بزاف (من 10)
   - name: CoinDesk
     url: https://www.coindesk.com/arc/outboundfeeds/rss/
 

@@ -218,6 +218,32 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(len(pub.sent), 2)
         self.assertEqual(rw.calls, 2)  # no AI calls wasted after the limit
 
+    def test_source_rules(self):
+        from bot.models import SourceRules
+
+        class ScoredRewriter(FakeRewriter):
+            async def process(self, text, *a, **k):
+                self.calls += 1
+                score = 9 if "Fed" in text else 3
+                return Decision(publish=True, post="📰 عنوان\nنص الخبر هنا بما يكفي من الطول", importance=score)
+
+        async def scenario():
+            storage, pub = Storage(":memory:"), FakePublisher()
+            p = Pipeline(make_settings(), storage, ScoredRewriter(), pub, no_alert)
+            ct = SourceRules(daily_max=1, min_importance=8)
+            for n, text in enumerate(["Minor exchange listing news today", "Fed cuts rates by 50bp today",
+                                      "Fed chair speaks again about rates"]):
+                item = make_item(f"rss:ct:{n}", text)
+                item.source, item.rules = "Cointelegraph", ct
+                await p.handle(item)
+            gold = make_item("rss:fx:1", "EUR/USD outlook for the week")
+            gold.rules = SourceRules(keywords=["gold", "xau"])
+            await p.handle(gold)
+            await p.close()
+            return pub
+        pub = self.run_async(scenario())
+        self.assertEqual(len(pub.sent), 1)  # minor skipped (importance), 2nd Fed skipped (daily max), no gold keyword
+
     def test_caption_limit_with_image(self):
         class LongRewriter(FakeRewriter):
             async def process(self, *a, **k):

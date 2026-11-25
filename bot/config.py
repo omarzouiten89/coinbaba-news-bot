@@ -22,7 +22,7 @@ class Settings:
     owner_chat_id: Optional[int]
     target_channel: Union[str, int, None]
     target_channel_public: str = ""
-    telegram_channels: List[str] = field(default_factory=list)
+    telegram_channels: list = field(default_factory=list)  # "@name" or {name, kind, daily_max, ...}
     rss_feeds: List[dict] = field(default_factory=list)
     daily_limit: int = 60
     timezone: str = "Africa/Casablanca"
@@ -79,7 +79,7 @@ def load_settings(config_path: Optional[Path] = None) -> Settings:
         owner_chat_id=_int_or_none(os.getenv("OWNER_CHAT_ID")),
         target_channel=_channel_ref(cfg.get("target_channel")),
         target_channel_public=str(cfg.get("target_channel_public") or ""),
-        telegram_channels=[str(c).strip() for c in (cfg.get("telegram_channels") or []) if str(c).strip()],
+        telegram_channels=[c for c in (cfg.get("telegram_channels") or []) if c],
         rss_feeds=list(cfg.get("rss_feeds") or []),
         daily_limit=int(cfg.get("daily_limit", 60)),
         timezone=str(cfg.get("timezone", "Africa/Casablanca")),
