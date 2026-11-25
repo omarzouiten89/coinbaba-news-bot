@@ -180,8 +180,8 @@ def _signature(html_text: str) -> str:
 
 def mirror_footer(cfg: dict) -> str:
     link = htmllib.escape(str(cfg.get("link") or ""))
-    label = htmllib.escape(str(cfg.get("footer") or "👈 سجّل الآن من هنا:"))
-    footer = f"{label}\n{link}" if link else ""
+    label = htmllib.escape(str(cfg.get("footer") or "👈 سجّل الآن من هنا").rstrip(":"))
+    footer = f'<a href="{link}">{label}</a>' if link else ""   # blue clickable text, no visible URL
     ask_link = str(cfg.get("inquiry_link") or "")
     if ask_link:  # added after cleaning, so it is never stripped
         ask_label = htmllib.escape(str(cfg.get("inquiry_label") or "💬 للاستفسار تواصل مع المساعد"))
