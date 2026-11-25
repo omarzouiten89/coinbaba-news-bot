@@ -86,6 +86,8 @@ mirrors:
     footer: "👈 سجّل الآن من هنا:"
     link: "https://app.hashnet.ai/Onemillion"   # رابط التسجيل ديالك
     start_after_id: 259             # نبداو من المنشور 260 (بداية منتج التأجير Lease)
+    inquiry_label: "💬 للاستفسار تواصل مع المساعد"
+    inquiry_link: "https://t.me/CoinBabaOfficialBot?start=hashnet"   # البوت اللي كيجاوب الناس
 
 # ===== الإعلان اليومي ديال الدورات (مرة فالنهار، بأزرار كتدي للموقع) =====
 daily_promo:

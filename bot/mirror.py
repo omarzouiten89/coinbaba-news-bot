@@ -181,7 +181,12 @@ def _signature(html_text: str) -> str:
 def mirror_footer(cfg: dict) -> str:
     link = htmllib.escape(str(cfg.get("link") or ""))
     label = htmllib.escape(str(cfg.get("footer") or "👈 سجّل الآن من هنا:"))
-    return f"{label}\n{link}" if link else ""
+    footer = f"{label}\n{link}" if link else ""
+    ask_link = str(cfg.get("inquiry_link") or "")
+    if ask_link:  # added after cleaning, so it is never stripped
+        ask_label = htmllib.escape(str(cfg.get("inquiry_label") or "💬 للاستفسار تواصل مع المساعد"))
+        footer += f'\n\n<a href="{htmllib.escape(ask_link)}">{ask_label}</a>'
+    return footer.strip()
 
 
 async def run_mirror(cfg: dict, bot_token: str, storage, silent: bool = True, backfill: bool = False,
