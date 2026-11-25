@@ -2,12 +2,15 @@
 
 Prices come from free public sources (CoinGecko, Yahoo Finance) and the calendar from ForexFactory's
 public JSON. Numbers are never written by the AI: they are inserted as received.
+The post is built as Telegram HTML (bold titles, separators, numbered headlines).
 """
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import logging
+import re
 from datetime import datetime
 from typing import List, Optional
 
@@ -20,8 +23,6 @@ except ImportError:  # pragma: no cover
 
 from .card import render_card
 from .lessons import due_slot
-from .publisher import CAPTION_LIMIT
-from .textutils import fit
 
 log = logging.getLogger(__name__)
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; COINBABA-NewsBot/1.0)"}
@@ -30,13 +31,18 @@ AR_DAYS = ["الاثنين", "الثلاثاء", "الأربعاء", "الخمي
 AR_MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر",
              "أكتوبر", "نوفمبر", "ديسمبر"]
 
-MARKETS = [  # (label, yahoo symbol, decimals)
-    ("🥇 الذهب", "GC=F", 0),
-    ("🥈 الفضة", "SI=F", 2),
-    ("🇺🇸 العقود الآجلة لـ S&P 500", "ES=F", 0),
-    ("💵 مؤشر الدولار", "DX-Y.NYB", 2),
-    ("🛢 النفط (WTI)", "CL=F", 2),
+MARKETS = [  # (emoji, Arabic name, yahoo symbol, decimals, dollar sign)
+    ("🥇", "الذهب", "GC=F", 0, True),
+    ("🥈", "الفضة", "SI=F", 2, True),
+    ("🇺🇸", "S&P 500 (عقود آجلة)", "ES=F", 0, False),
+    ("💵", "مؤشر الدولار", "DX-Y.NYB", 2, False),
+    ("🛢", "النفط WTI", "CL=F", 2, True),
 ]
+
+LTR = "⁦{}⁩"   # keeps "$58,543" and "-2.9%" in the right order inside Arabic lines
+SEP = "━━━━━━━━━━━━━━"
+NUM_EMOJI = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
+FLAGS = {"USD": "🇺🇸", "EUR": "🇪🇺", "CNY": "🇨🇳"}
 
 
 def arabic_date(d: datetime) -> str:
@@ -47,11 +53,12 @@ def _fmt(price: float, decimals: int) -> str:
     return f"{price:,.{decimals}f}"
 
 
-def _change(pct: Optional[float]) -> str:
-    if pct is None:
-        return ""
-    arrow = "🟢" if pct >= 0 else "🔴"
-    return f" {arrow} {pct:+.1f}%"
+def price_line(emoji: str, name: str, value: str, pct: Optional[float]) -> str:
+    """'₿ <b>البيتكوين</b>:  $58,543   🔴 -2.9%' with the numbers kept left-to-right."""
+    line = f"{emoji} <b>{html.escape(name)}</b>:  {LTR.format(html.escape(value))}"
+    if pct is not None:
+        line += f"   {'🟢' if pct >= 0 else '🔴'} {LTR.format(f'{pct:+.1f}%')}"
+    return line
 
 
 async def crypto_lines(client: httpx.AsyncClient) -> List[str]:
@@ -60,13 +67,14 @@ async def crypto_lines(client: httpx.AsyncClient) -> List[str]:
     r.raise_for_status()
     d = r.json()
     out = []
-    for key, label in (("bitcoin", "₿ البيتكوين"), ("ethereum", "Ξ الإيثيريوم")):
+    for key, emoji, name in (("bitcoin", "₿", "البيتكوين"), ("ethereum", "Ξ", "الإيثيريوم")):
         if key in d:
-            out.append(f"{label}: ${_fmt(d[key]['usd'], 0)}{_change(d[key].get('usd_24h_change'))}")
+            out.append(price_line(emoji, name, f"${_fmt(d[key]['usd'], 0)}", d[key].get("usd_24h_change")))
     return out
 
 
-async def market_line(client: httpx.AsyncClient, label: str, symbol: str, decimals: int) -> Optional[str]:
+async def market_line(client: httpx.AsyncClient, emoji: str, name: str, symbol: str, decimals: int,
+                      dollar: bool) -> Optional[str]:
     r = await client.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}", headers=HEADERS,
                          params={"range": "5d", "interval": "1d"})
     r.raise_for_status()
@@ -75,8 +83,7 @@ async def market_line(client: httpx.AsyncClient, label: str, symbol: str, decima
     closes = [c for c in res["indicators"]["quote"][0].get("close") or [] if c is not None]
     prev = closes[-2] if len(closes) >= 2 else None
     pct = (price - prev) / prev * 100 if prev else None
-    unit = "$" if symbol not in ("DX-Y.NYB", "ES=F") else ""
-    return f"{label}: {unit}{_fmt(price, decimals)}{_change(pct)}"
+    return price_line(emoji, name, f"{'$' if dollar else ''}{_fmt(price, decimals)}", pct)
 
 
 async def todays_events(client: httpx.AsyncClient, tz: ZoneInfo, today) -> List[tuple]:
@@ -84,7 +91,7 @@ async def todays_events(client: httpx.AsyncClient, tz: ZoneInfo, today) -> List[
     r.raise_for_status()
     events = []
     for e in r.json():
-        if e.get("impact") != "High" or e.get("country") not in ("USD", "EUR", "CNY"):
+        if e.get("impact") != "High" or e.get("country") not in FLAGS:
             continue
         when = datetime.fromisoformat(e["date"]).astimezone(tz)
         if when.date() == today:
@@ -93,25 +100,30 @@ async def todays_events(client: httpx.AsyncClient, tz: ZoneInfo, today) -> List[
     return sorted(events)[:5]
 
 
+def _clean_headline(h: str) -> str:
+    """Drops the leading emoji/flag of a channel headline."""
+    return re.sub(r"^[^\w؀-ۿ\"«(]+", "", h).strip()
+
+
 async def build_brief(settings, rewriter, pipeline) -> str:
     tz = ZoneInfo(settings.timezone)
     now = datetime.now(tz)
-    parts = [f"☀️ ملخص الصباح | {arabic_date(now)}", ""]
+    parts = [f"☀️ <b>ملخص الصباح</b>  |  {html.escape(arabic_date(now))}", SEP]
     async with httpx.AsyncClient(timeout=20) as client:
         prices: List[str] = []
         try:
             prices += await crypto_lines(client)
         except Exception as exc:
             log.info("Crypto prices failed: %s", exc)
-        for label, symbol, dec in MARKETS:
+        for emoji, name, symbol, dec, dollar in MARKETS:
             try:
-                line = await market_line(client, label, symbol, dec)
+                line = await market_line(client, emoji, name, symbol, dec, dollar)
                 if line:
                     prices.append(line)
             except Exception as exc:
                 log.info("Price %s failed: %s", symbol, exc)
         if prices:
-            parts += ["📊 الأسواق الآن:", *prices, ""]
+            parts += ["📊 <b>الأسواق الآن</b>", "", *prices, SEP]
 
         try:
             events = await todays_events(client, tz, now.date())
@@ -122,21 +134,24 @@ async def build_brief(settings, rewriter, pipeline) -> str:
     headlines = [h for h in await pipeline.published_headlines()
                  if not h.startswith(("📚", "📊", "☀️"))][:3]
     if headlines:
-        parts += ["📰 أبرز ما حدث:", *[f"• {h.lstrip('🚨📰📈📉🇺🇸 ').strip()}" for h in headlines], ""]
+        parts += ["📰 <b>أبرز الأخبار</b>", ""]
+        parts += [f"{NUM_EMOJI[i]} {html.escape(_clean_headline(h))}" for i, h in enumerate(headlines)]
+        parts.append(SEP)
 
     if events is not None:
+        parts += ["🗓 <b>أجندة اليوم</b> (بتوقيت الإمارات)", ""]
         if events:
-            titles = [t for _, _, t, _, _ in events]
-            arabic = await translate_titles(rewriter, titles)
-            parts.append("🗓 أحداث اليوم المهمة (بتوقيت الإمارات):")
-            for (when, cur, _, fc, prev), name in zip(events, arabic):
-                extra = f" | المتوقع {fc}" if fc else ""
-                parts.append(f"⏰ {when:%H:%M} {cur}: {name}{extra}")
+            arabic = await translate_titles(rewriter, [t for _, _, t, _, _ in events])
+            for (when, cur, _, fc, _), name in zip(events, arabic):
+                line = f"⏰ <b>{LTR.format(f'{when:%H:%M}')}</b>  {FLAGS.get(cur, '')} {html.escape(name)}"
+                if fc:
+                    line += f"\n      ↳ المتوقع: {LTR.format(html.escape(fc))}"
+                parts.append(line)
         else:
-            parts.append("🗓 لا توجد أحداث اقتصادية كبرى اليوم.")
-        parts.append("")
+            parts.append("✅ لا توجد أحداث اقتصادية كبرى اليوم.")
+        parts.append(SEP)
 
-    parts.append("#ملخص_الصباح #بيتكوين #الذهب #الأسواق_المالية")
+    parts.append("#ملخص_الصباح #بيتكوين #الذهب #الأسواق_المالية #BTC")
     return "\n".join(parts).strip()
 
 
@@ -160,6 +175,10 @@ async def translate_titles(rewriter, titles: List[str]) -> List[str]:
         return titles
 
 
+def visible_length(html_text: str) -> int:
+    return len(html.unescape(re.sub(r"<[^>]+>", "", html_text)))
+
+
 async def post_due_brief(settings, storage, rewriter, publisher, pipeline) -> bool:
     cfg = settings.morning
     if not cfg.get("enabled"):
@@ -175,12 +194,15 @@ async def post_due_brief(settings, storage, rewriter, publisher, pipeline) -> bo
     if any("ملخص الصباح" in h and arabic_date(now) in h for h in await pipeline.published_headlines()):
         storage.set(key, "posted-by-other")
         return False
-    text = fit(await build_brief(settings, rewriter, pipeline), CAPTION_LIMIT)
+    text = await build_brief(settings, rewriter, pipeline)
+    while visible_length(text) > 1024 and SEP in text:  # too long for a photo caption: drop the agenda
+        text = text.rsplit(SEP, 2)[0] + SEP + "\n" + text.rsplit("\n", 1)[-1]
     card = await asyncio.to_thread(render_card, f"ملخص الصباح {arabic_date(now)}", "صباح الخير",
                                    f"@{settings.target_channel_public}" if settings.target_channel_public else "")
-    await publisher.send_post(text, card)
+    await publisher.send_post(text, card, is_html=True)
     storage.set(key, "1")
-    storage.add_post(f"{now:%Y-%m-%d}", "morning", key, "lesson", text.splitlines()[0], text, None)
+    plain = html.unescape(re.sub(r"<[^>]+>", "", text))
+    storage.add_post(f"{now:%Y-%m-%d}", "morning", key, "lesson", plain.splitlines()[0], plain, None)
     log.info("Morning brief posted")
     return True
 

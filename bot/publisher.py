@@ -55,10 +55,13 @@ class Publisher:
             raise PublishError(f"{method}: {payload.get('description', resp.text[:200])}")
         raise PublishError(f"{method}: gave up after retries")
 
-    async def send_post(self, text: str, image: Optional[bytes], silent: bool = False) -> Optional[int]:
+    async def send_post(self, text: str, image: Optional[bytes], silent: bool = False,
+                        is_html: bool = False) -> Optional[int]:
         """Sends the post; returns the Telegram message id (None in dry-run).
-        silent=True: followers get it without a notification sound."""
+        silent=True: followers get it without a notification sound.
+        is_html=True: `text` is already Telegram HTML (bold, separators...) and is sent as is."""
         quiet = {"disable_notification": "true"} if silent else {}
+        to_html = (lambda t: t) if is_html else to_telegram_html
         if self.dry_run:
             print("\n" + "=" * 60 + f"\n[DRY RUN] {'with image (' + str(len(image)) + ' bytes)' if image else 'text only'}\n" + text + "\n" + "=" * 60)
             return None
@@ -67,7 +70,7 @@ class Publisher:
             try:
                 result = await self._call(
                     "sendPhoto",
-                    data={"chat_id": str(self.channel), "caption": to_telegram_html(text), "parse_mode": "HTML",
+                    data={"chat_id": str(self.channel), "caption": to_html(text), "parse_mode": "HTML",
                           **quiet},
                     files={"photo": ("photo.jpg", image)},
                 )
@@ -80,7 +83,7 @@ class Publisher:
             "sendMessage",
             data={
                 "chat_id": str(self.channel),
-                "text": to_telegram_html(text),
+                "text": to_html(text),
                 "parse_mode": "HTML",
                 "disable_web_page_preview": "true",
                 **quiet,
