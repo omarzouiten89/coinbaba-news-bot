@@ -34,6 +34,7 @@ class Settings:
     data_dir: Path = BASE_DIR / "data"
     promo: dict = field(default_factory=dict)
     lessons: dict = field(default_factory=dict)
+    polls: dict = field(default_factory=dict)
 
 
 def _int_or_none(value: Optional[str]) -> Optional[int]:
@@ -90,4 +91,5 @@ def load_settings(config_path: Optional[Path] = None) -> Settings:
         data_dir=data_dir,
         promo=dict(cfg.get("daily_promo") or {}),
         lessons=dict(cfg.get("daily_lessons") or {}),
+        polls=dict(cfg.get("daily_polls") or {}),
     )

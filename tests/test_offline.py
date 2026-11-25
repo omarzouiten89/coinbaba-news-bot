@@ -148,6 +148,23 @@ class LessonTests(unittest.TestCase):
         self.assertTrue(render_card("ما هو التضخم؟").startswith(b"\xff\xd8"))  # a JPEG
 
 
+class PollTests(unittest.TestCase):
+    def test_parse_poll(self):
+        from bot.rewriter import parse_poll
+        p = parse_poll('{"question": "كيف تتوقع البيتكوين؟", "options": ["📈 صعود", "📉 هبوط", "↔️ استقرار"], '
+                       '"correct_index": null, "explanation": ""}')
+        self.assertEqual(len(p.options), 3)
+        self.assertIsNone(p.correct_index)
+        with self.assertRaises(ValueError):
+            parse_poll('{"question": "x", "options": ["only one"]}')
+
+    def test_theme_changes_daily(self):
+        from datetime import date
+        from bot.polls import theme_for_day
+        kinds = {theme_for_day(date(2026, 11, d))[0] for d in range(1, 5)}
+        self.assertEqual(kinds, {"bitcoin", "gold", "event", "market"})
+
+
 class PipelineTests(unittest.TestCase):
     def run_async(self, coro):
         return asyncio.run(coro)

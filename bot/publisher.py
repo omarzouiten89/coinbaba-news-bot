@@ -101,6 +101,29 @@ class Publisher:
                 "disable_web_page_preview": "true"})
         return result.get("message_id")
 
+    async def send_poll(self, question: str, options: List[str], correct_index: Optional[int] = None,
+                        explanation: str = "", chat_id: Union[str, int, None] = None) -> Optional[int]:
+        """A channel poll. With `correct_index` it becomes a quiz that reveals the right answer."""
+        import json
+        question = question.strip()[:300]
+        options = [o.strip()[:100] for o in options if o.strip()][:10]
+        if self.dry_run:
+            print(f"\n[DRY RUN poll] {question}\n  " + "\n  ".join(options) + f"\n  correct={correct_index}")
+            return None
+        data = {
+            "chat_id": str(chat_id or self.channel),
+            "question": question,
+            "options": json.dumps([{"text": o} for o in options], ensure_ascii=False),
+            "is_anonymous": "true",
+        }
+        if correct_index is not None and 0 <= correct_index < len(options):
+            data["type"] = "quiz"
+            data["correct_option_id"] = str(correct_index)
+            if explanation:
+                data["explanation"] = explanation.strip()[:200]
+        result = await self._call("sendPoll", data=data)
+        return result.get("message_id")
+
     async def send_private(self, chat_id: int, text: str) -> None:
         if self.dry_run:
             print(f"[DRY RUN alert to owner] {text}")

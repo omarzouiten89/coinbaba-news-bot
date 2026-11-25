@@ -58,6 +58,10 @@ async def run_bot(settings) -> None:
         tasks.append(asyncio.create_task(
             lessons_loop(settings, storage, rewriter, publisher, pipeline, alert)))
 
+    if settings.polls.get("enabled"):
+        from bot.polls import polls_loop
+        tasks.append(asyncio.create_task(polls_loop(settings, storage, rewriter, publisher, alert, pipeline)))
+
     if settings.promo.get("enabled"):
         from bot.promo import promo_loop
         tasks.append(asyncio.create_task(
@@ -128,6 +132,12 @@ async def run_once(settings) -> None:
                 await post_due_lesson(settings, storage, rewriter, publisher, pipeline)
             except Exception as exc:
                 log.warning("Lesson failed (will retry next run): %s", exc)
+        if settings.polls.get("enabled"):
+            from bot.polls import post_due_poll
+            try:
+                await post_due_poll(settings, storage, rewriter, publisher, pipeline)
+            except Exception as exc:
+                log.warning("Poll failed (will retry next run): %s", exc)
         log.info("Run finished: %d published", pipeline.published)
     finally:
         await pipeline.close()

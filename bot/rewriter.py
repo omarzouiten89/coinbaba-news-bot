@@ -82,6 +82,41 @@ Write ONE short lesson in Modern Standard Arabic (فصحى) about the topic you 
 Reply with the post text only."""
 
 
+POLL_PROMPT = """You create the daily Telegram opinion poll of COINBABA, an Arabic channel about investing and markets.
+Goal: make followers PARTICIPATE (vote and discuss), not just read. Modern Standard Arabic, short, lively,
+1 or 2 emojis max.
+
+Write ONE opinion question about the given theme, asking the FOLLOWERS what they expect or think
+(e.g. "كيف تتوقع أن يغلق البيتكوين هذا الأسبوع؟"), with 3 or 4 short, clear options
+(e.g. 📈 صعود / 📉 هبوط / ↔️ استقرار). The channel itself gives no advice and no prediction.
+If recent channel headlines are provided, base the question on the most important economic event among them
+and mention it briefly in the question. Do not invent events. There is no correct answer: correct_index is null.
+
+Limits: question max 250 characters, each option max 60 characters, explanation max 180 characters.
+Reply with JSON only:
+{"question": "...", "options": ["...", "..."], "correct_index": 0 or null, "explanation": "..." or ""}"""
+
+
+@dataclass
+class Poll:
+    question: str
+    options: List[str]
+    correct_index: Optional[int]
+    explanation: str
+
+
+def parse_poll(raw: str) -> Poll:
+    raw = (raw or "").strip()
+    match = re.search(r"\{.*\}", raw, re.DOTALL)
+    data = json.loads(match.group(0) if match else raw)
+    options = [str(o) for o in data.get("options") or [] if str(o).strip()]
+    if not data.get("question") or not 2 <= len(options) <= 10:
+        raise ValueError("bad poll")
+    idx = data.get("correct_index")
+    idx = int(idx) if isinstance(idx, (int, float)) and 0 <= int(idx) < len(options) else None
+    return Poll(str(data["question"]), options, idx, str(data.get("explanation") or ""))
+
+
 @dataclass
 class Decision:
     publish: bool
@@ -167,6 +202,14 @@ class GeminiRewriter:
             return text
 
         return await self._generate(body, parse)
+
+    async def write_poll(self, kind: str, topic: str) -> "Poll":
+        body = {
+            "systemInstruction": {"parts": [{"text": POLL_PROMPT}]},
+            "contents": [{"role": "user", "parts": [{"text": f"kind: {kind}\ntopic: {topic}"}]}],
+            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.8},
+        }
+        return await self._generate(body, parse_poll)
 
     async def _generate(self, body: dict, parse):
         delays = [15, 45, 90]
