@@ -108,7 +108,11 @@ def _clean_headline(h: str) -> str:
 async def build_brief(settings, rewriter, pipeline) -> str:
     tz = ZoneInfo(settings.timezone)
     now = datetime.now(tz)
-    parts = [f"☀️ <b>ملخص الصباح</b>  |  {html.escape(arabic_date(now))}", SEP]
+    if now.weekday() == 4:  # Friday
+        header = f"☀️ <b>صباح الخير وجمعة طيبة</b> 🌙  |  {html.escape(arabic_date(now))}"
+    else:
+        header = f"☀️ <b>ملخص الصباح</b>  |  {html.escape(arabic_date(now))}"
+    parts = [header, SEP]
     async with httpx.AsyncClient(timeout=20) as client:
         prices: List[str] = []
         try:
@@ -191,15 +195,17 @@ async def post_due_brief(settings, storage, rewriter, publisher, pipeline) -> bo
         return False
     key = f"brief:{now:%Y-%m-%d}:0"
     # Hybrid safety: the other bot may have posted it already.
-    if any("ملخص الصباح" in h and arabic_date(now) in h for h in await pipeline.published_headlines()):
+    if any(("ملخص الصباح" in h or "جمعة طيبة" in h) and arabic_date(now) in h
+           for h in await pipeline.published_headlines()):
         storage.set(key, "posted-by-other")
         return False
     text = await build_brief(settings, rewriter, pipeline)
     while visible_length(text) > 1024 and SEP in text:  # too long for a photo caption: drop the agenda
         text = text.rsplit(SEP, 2)[0] + SEP + "\n" + text.rsplit("\n", 1)[-1]
-    card = await asyncio.to_thread(render_card, "ملخص الصباح", "صباح الخير",
+    friday = now.weekday() == 4
+    card = await asyncio.to_thread(render_card, "جمعة طيبة" if friday else "ملخص الصباح", "صباح الخير",
                                    f"@{settings.target_channel_public}" if settings.target_channel_public else "",
-                                   arabic_date(now))
+                                   arabic_date(now), "friday" if friday else "")
     await publisher.send_post(text, card, is_html=True)
     storage.set(key, "1")
     plain = html.unescape(re.sub(r"<[^>]+>", "", text))

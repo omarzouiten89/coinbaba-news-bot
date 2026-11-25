@@ -144,9 +144,61 @@ def _photo_layer(height: int) -> Optional[Image.Image]:
     return layer
 
 
+def _star(cx: float, cy: float, r: float) -> List[tuple]:
+    import math
+    pts = []
+    for i in range(10):
+        rad = r if i % 2 == 0 else r * 0.42
+        a = -math.pi / 2 + i * math.pi / 5
+        pts.append((cx + rad * math.cos(a), cy + rad * math.sin(a)))
+    return pts
+
+
+def _friday_layer() -> Image.Image:
+    """Gold Islamic motifs for Friday: crescent and stars, and a mosque silhouette."""
+    layer = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    gold = (*GOLD, 255)
+
+    # Crescent + stars (upper middle)
+    moon = Image.new("L", (SIZE, SIZE), 0)
+    md = ImageDraw.Draw(moon)
+    md.ellipse((600, 170, 740, 310), fill=255)
+    md.ellipse((632, 150, 760, 278), fill=0)
+    layer.paste(Image.new("RGBA", (SIZE, SIZE), gold), (0, 0), moon)
+    for cx, cy, r in ((775, 205, 16), (820, 260, 9), (560, 175, 8), (870, 190, 6)):
+        d.polygon(_star(cx, cy, r), fill=gold)
+
+    # Mosque silhouette (bottom right), drawn faintly
+    m = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    k = ImageDraw.Draw(m)
+    c = (*GOLD, 255)
+    base_y = 960
+    k.rectangle((640, 870, 1040, base_y), fill=c)                      # main hall
+    k.ellipse((760, 760, 920, 920), fill=c)                            # big dome
+    k.rectangle((835, 725, 845, 765), fill=c)                          # dome spire
+    k.ellipse((828, 712, 852, 736), fill=c)
+    for x0 in (680, 940):                                              # small domes
+        k.ellipse((x0, 830, x0 + 60, 890), fill=c)
+    for x0 in (612, 1028):                                             # minarets
+        k.rectangle((x0, 740, x0 + 22, base_y), fill=c)
+        k.polygon([(x0 - 4, 740), (x0 + 26, 740), (x0 + 11, 690)], fill=c)
+        k.rectangle((x0 - 6, 800, x0 + 28, 808), fill=c)
+    for x0 in range(690, 1000, 56):                                    # arched doors (cut out)
+        k.rectangle((x0, 905, x0 + 26, base_y), fill=(0, 0, 0, 0))
+        k.ellipse((x0, 892, x0 + 26, 918), fill=(0, 0, 0, 0))
+    alpha = m.getchannel("A").point(lambda a: int(a * 0.35))
+    m.putalpha(alpha)
+    layer.alpha_composite(m)
+    return layer
+
+
 def render_card(title: str, badge: str = "معلومة اليوم", handle: str = "@financemante",
-                subtitle: str = "") -> bytes:
+                subtitle: str = "", theme: str = "") -> bytes:
     img = _background()
+    if theme == "friday":
+        fl = _friday_layer()
+        img.paste(fl, (0, 0), fl)
     draw = ImageDraw.Draw(img)
 
     photo = _photo_layer(760)
