@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from .reactions import react
 from .rss_source import HEADERS
 
 log = logging.getLogger(__name__)
@@ -125,7 +126,11 @@ class MirrorPublisher:
         for _ in range(5):
             r = (await self.client.post(self.api + method, data=data, files=files)).json()
             if r.get("ok"):
-                return r["result"]
+                res = r["result"]
+                first = res[0] if isinstance(res, list) and res else res
+                if getattr(self, "_first_id", None) is None and isinstance(first, dict):
+                    self._first_id = first.get("message_id")
+                return res
             retry = (r.get("parameters") or {}).get("retry_after")
             if retry:
                 await asyncio.sleep(int(retry) + 1)
@@ -134,6 +139,11 @@ class MirrorPublisher:
         raise RuntimeError(f"{method}: too many retries")
 
     async def post(self, p: MirrorPost, silent: bool) -> None:
+        self._first_id = None
+        await self._post(p, silent)
+        await react(self.client, self.api, self.target, self._first_id)  # one varied reaction per post
+
+    async def _post(self, p: MirrorPost, silent: bool) -> None:
         text = (p.html_text + "\n\n" + self.footer).strip() if p.html_text else self.footer
         base = {"chat_id": self.target, "parse_mode": "HTML"}
         if silent:

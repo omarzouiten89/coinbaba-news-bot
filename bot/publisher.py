@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Union
 
 import httpx
 
+from .reactions import react
 from .textutils import to_telegram_html
 
 log = logging.getLogger(__name__)
@@ -74,6 +75,7 @@ class Publisher:
                           **quiet},
                     files={"photo": ("photo.jpg", image)},
                 )
+                await react(self._client, self.base, self.channel, result.get("message_id"))
                 return result.get("message_id")
             except PublishError as exc:
                 # A broken image should not lose the news: fall back to text only.
@@ -89,6 +91,7 @@ class Publisher:
                 **quiet,
             },
         )
+        await react(self._client, self.base, self.channel, result.get("message_id"))
         return result.get("message_id")
 
     async def send_promo(self, text: str, buttons: List[dict], image_url: Optional[str] = None) -> Optional[int]:
@@ -129,6 +132,7 @@ class Publisher:
             if explanation:
                 data["explanation"] = explanation.strip()[:200]
         result = await self._call("sendPoll", data=data)
+        await react(self._client, self.base, data["chat_id"], result.get("message_id"))
         return result.get("message_id")
 
     async def send_private(self, chat_id: int, text: str) -> None:
