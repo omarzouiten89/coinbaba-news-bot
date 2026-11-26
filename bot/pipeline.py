@@ -181,7 +181,9 @@ class Pipeline:
             return None
 
         silent = self.settings.silent_news and not breaking
-        message_id = await self.publisher.send_post(text, item.image, silent=silent)
+        message_id = await self.publisher.send_post(text, item.image, silent=silent,
+                                                    fb_kind="news" if is_news else "analysis",
+                                                    importance=decision.importance)
         headline = text.splitlines()[0][:200]
         category = "analysis" if not is_news else decision.category
         self.storage.add_post(today, item.source, item.key, category, headline, text, message_id)

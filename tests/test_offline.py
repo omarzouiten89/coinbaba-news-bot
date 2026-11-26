@@ -31,7 +31,7 @@ class FakePublisher:
     def __init__(self):
         self.sent = []
 
-    async def send_post(self, text, image, silent=False):
+    async def send_post(self, text, image, silent=False, **_):
         self.sent.append((text, image))
         self.silent = getattr(self, "silent", []) + [silent]
         return len(self.sent)
@@ -51,6 +51,43 @@ def make_item(key, text, image=b"img", hours_old=0.1):
 
 async def no_alert(_):
     pass
+
+
+class FacebookTests(unittest.TestCase):
+    def page(self, **cfg):
+        from bot.facebook import FacebookPage
+        return FacebookPage("1", "t", cfg, "Asia/Dubai", dry_run=True)
+
+    def test_text_has_no_links_and_has_hashtags(self):
+        from bot.facebook import facebook_text
+        out = facebook_text("<b>البيتكوين يتجاوز 100 ألف</b>\nتابعونا @financemante https://t.me/x #قديم",
+                            "news", is_html=True)
+        self.assertNotIn("http", out)
+        self.assertNotIn("t.me", out)
+        self.assertNotIn("@financemante", out)
+        self.assertNotIn("<b>", out)
+        self.assertNotIn("#قديم", out)
+        tags = out.splitlines()[-1].split()
+        self.assertIn("#كوين_بابا", tags)
+        self.assertIn("#بيتكوين", tags)
+        self.assertLessEqual(len(tags), 5)
+
+    def test_limits(self):
+        p = self.page(daily_max=3, min_gap_minutes=45, news_min_importance=7)
+        now = 1_000_000.0
+        self.assertIsNone(p.reason_to_skip("news", 8, [], now))
+        self.assertIn("importance", p.reason_to_skip("news", 6, [], now))
+        self.assertIn("min", p.reason_to_skip("news", 9, [now - 600], now))
+        self.assertIsNone(p.reason_to_skip("lesson", None, [now - 600], now))  # scheduled: no gap
+        self.assertIn("daily max", p.reason_to_skip("lesson", None, [1, 2, 3], now))
+        self.assertIn("not enabled", p.reason_to_skip("poll", None, [], now))
+
+    def test_dry_run_counts_posts(self):
+        p = self.page(daily_max=1)
+        first = asyncio.run(p.maybe_post("خبر مهم عن الذهب", None, "news", 9))
+        second = asyncio.run(p.maybe_post("خبر آخر", None, "lesson"))
+        self.assertEqual(first, "dry-run")
+        self.assertIsNone(second)
 
 
 class TextTests(unittest.TestCase):

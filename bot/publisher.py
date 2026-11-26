@@ -35,6 +35,7 @@ class Publisher:
         self.channel = channel
         self.dry_run = dry_run
         self._client = httpx.AsyncClient(timeout=120)
+        self.facebook = None  # optional FacebookPage: posts with `fb_kind` are copied there too
 
     async def _call(self, method: str, data: dict, files: Optional[dict] = None) -> dict:
         for attempt in range(4):
@@ -57,10 +58,20 @@ class Publisher:
         raise PublishError(f"{method}: gave up after retries")
 
     async def send_post(self, text: str, image: Optional[bytes], silent: bool = False,
-                        is_html: bool = False) -> Optional[int]:
+                        is_html: bool = False, fb_kind: Optional[str] = None,
+                        importance: Optional[int] = None) -> Optional[int]:
         """Sends the post; returns the Telegram message id (None in dry-run).
         silent=True: followers get it without a notification sound.
-        is_html=True: `text` is already Telegram HTML (bold, separators...) and is sent as is."""
+        is_html=True: `text` is already Telegram HTML (bold, separators...) and is sent as is.
+        fb_kind ("news", "analysis", "lesson", "morning"): also copy it to the Facebook Page,
+        if Facebook is on and its limits allow it. A Facebook problem never stops the Telegram post."""
+        message_id = await self._send_telegram_post(text, image, silent, is_html)
+        if self.facebook and fb_kind:
+            await self.facebook.maybe_post(text, image, fb_kind, importance, is_html)
+        return message_id
+
+    async def _send_telegram_post(self, text: str, image: Optional[bytes], silent: bool,
+                                  is_html: bool) -> Optional[int]:
         quiet = {"disable_notification": "true"} if silent else {}
         to_html = (lambda t: t) if is_html else to_telegram_html
         if self.dry_run:
@@ -166,6 +177,8 @@ class Publisher:
 
     async def close(self) -> None:
         await self._client.aclose()
+        if self.facebook:
+            await self.facebook.close()
 
 
 class Alerter:

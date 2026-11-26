@@ -216,7 +216,7 @@ async def post_due_brief(settings, storage, rewriter, publisher, pipeline) -> bo
     card = await asyncio.to_thread(render_card, look["title"], "صباح الخير",
                                    f"@{settings.target_channel_public}" if settings.target_channel_public else "",
                                    arabic_date(now), look["theme"])
-    await publisher.send_post(text, card, is_html=True)
+    await publisher.send_post(text, card, is_html=True, fb_kind="morning")
     storage.set(key, "1")
     plain = html.unescape(re.sub(r"<[^>]+>", "", text))
     storage.add_post(f"{now:%Y-%m-%d}", "morning", key, "lesson", plain.splitlines()[0], plain, None)

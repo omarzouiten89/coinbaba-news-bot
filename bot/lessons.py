@@ -127,7 +127,7 @@ async def post_due_lesson(settings, storage, rewriter, publisher, pipeline) -> b
     text = fit("\n".join([f"📚 {title}", *lines]).strip(), CAPTION_LIMIT)
     card = await asyncio.to_thread(render_card, title, "معلومة اليوم",
                                    f"@{settings.target_channel_public}" if settings.target_channel_public else "")
-    await publisher.send_post(text, card)
+    await publisher.send_post(text, card, fb_kind="lesson")
     storage.set(key, "1")
     storage.add_post(f"{now:%Y-%m-%d}", "lesson", key, "lesson", f"📚 {title}", text, None)
     log.info("Lesson posted: %s", title)
