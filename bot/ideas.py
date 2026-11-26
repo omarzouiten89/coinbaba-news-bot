@@ -40,9 +40,19 @@ NAMES = {
     "NVDA": "إنفيديا NVIDIA", "MSFT": "مايكروسوفت Microsoft", "AAPL": "آبل Apple",
     "AMZN": "أمازون Amazon", "GOOGL": "جوجل Alphabet", "META": "ميتا Meta",
     "TSLA": "تسلا Tesla", "AMD": "إي إم دي AMD", "NFLX": "نتفليكس Netflix", "PLTR": "بالانتير Palantir",
-    "QQQ": "صندوق ناسداك 100 (ETF) QQQ", "SPY": "صندوق S&P 500 (ETF) SPY",
-    "SMH": "صندوق أشباه الموصلات (ETF) SMH", "XLK": "صندوق قطاع التكنولوجيا (ETF) XLK",
+    # ETFs as XTB sells them (UCITS, London, in USD). Yahoo symbol -> name
+    "CNDX.L": "صندوق ناسداك 100 (ETF)", "CSPX.L": "صندوق S&P 500 (ETF)",
+    "IUIT.L": "صندوق التكنولوجيا الأمريكية (ETF)", "SMH.L": "صندوق أشباه الموصلات (ETF)",
 }
+
+
+def symbol(ticker: str) -> str:
+    """The symbol as it appears on XTB: London ETFs end with .UK there."""
+    return ticker[:-2] + ".UK" if ticker.endswith(".L") else ticker
+
+
+def tag(ticker: str) -> str:
+    return ticker.split(".")[0]
 DEFAULT_TICKERS = list(NAMES)
 
 TIPS = [
@@ -245,7 +255,7 @@ def build_text(idea: Idea, tip: str, handle: str = "") -> str:
     e = idea.entry
     lines = [
         f"💡 <b>فكرة تداولية: {name}</b>",
-        f"{side}  |  إطار يومي  |  {LTR.format('$' + idea.ticker)}",
+        f"{side}  |  إطار يومي  |  XTB: {LTR.format(symbol(idea.ticker))}",
         SEP,
         f"📍 <b>منطقة الدخول:</b> {LTR.format(_usd(idea.entry_low) + ' – ' + _usd(idea.entry_high))}",
         f"🛑 <b>وقف الخسارة:</b> {LTR.format(_usd(idea.stop))}  ({_pct(idea.stop, e)})",
@@ -261,7 +271,7 @@ def build_text(idea: Idea, tip: str, handle: str = "") -> str:
         "⚠️ <i>فكرة تعليمية للتطبيق على الحساب التجريبي، وليست نصيحة استثمارية. "
         "إذا لم يصل السعر إلى منطقة الدخول خلال يومين، تُلغى الفكرة.</i>",
         "",
-        f"#{idea.ticker} #فكرة_تداولية #الأسهم_الأمريكية",
+        f"#{tag(idea.ticker)} #فكرة_تداولية #الأسهم_الأمريكية",
     ]
     return "\n".join(lines)
 
@@ -326,8 +336,8 @@ def render_chart(c: Candles, idea: Idea, handle: str = "", bars: int = 70) -> by
 
     # header
     side_col = (38, 196, 133) if idea.side == "long" else (234, 76, 92)
-    d.text((40, 58), idea.ticker, font=_latin_font(64), fill=WHITE, anchor="lm")
-    tw = d.textlength(idea.ticker, font=_latin_font(64))
+    d.text((40, 58), symbol(idea.ticker), font=_latin_font(64), fill=WHITE, anchor="lm")
+    tw = d.textlength(symbol(idea.ticker), font=_latin_font(64))
     side_txt = "BUY" if idea.side == "long" else "SHORT"
     sw = d.textlength(side_txt, font=_latin_font(30))
     d.rounded_rectangle([40 + tw + 24, 36, 40 + tw + 24 + sw + 36, 82], radius=22, fill=side_col)
@@ -466,7 +476,7 @@ def evaluate(data: dict, bars: List[tuple]) -> List[str]:
 
 
 def result_text(data: dict, event: str, price: float) -> str:
-    t, e = data["ticker"], data["entry"]
+    t, e = symbol(data["ticker"]), data["entry"]
     sign = 1 if data["side"] == "long" else -1
     pct = lambda v: LTR.format(f"{sign * (v - e) / e * 100:+.1f}%")  # noqa: E731
     if event == "tp1":

@@ -135,4 +135,4 @@ trade_ideas:
   per_slot: 1                  # فكرة وحدة فكل وقت
   long_only: true               # شراء مباشر فقط: بلا رافعة، بلا Short، بلا عقود آجلة
   tickers: [NVDA, MSFT, AAPL, AMZN, GOOGL, META, TSLA, AMD, NFLX, PLTR,
-            QQQ, SPY, SMH, XLK]   # الأسهم + صناديق ETF عادية (بلا رافعة)
+            CNDX.L, CSPX.L, IUIT.L, SMH.L]   # صناديق ETF كيفما كاينين فـ XTB (CNDX.UK, CSPX.UK...)
