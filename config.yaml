@@ -133,4 +133,6 @@ trade_ideas:
   handle: ""                   # مثال: "@financeman_stocks"
   times: ["18:45", "20:30"]    # بتوقيت الإمارات (السوق الأمريكي كيحل 18:30 فالشتا)
   per_slot: 1                  # فكرة وحدة فكل وقت
-  tickers: [NVDA, MSFT, AAPL, AMZN, GOOGL, META, TSLA, AMD, NFLX, PLTR]
+  long_only: true               # شراء مباشر فقط: بلا رافعة، بلا Short، بلا عقود آجلة
+  tickers: [NVDA, MSFT, AAPL, AMZN, GOOGL, META, TSLA, AMD, NFLX, PLTR,
+            QQQ, SPY, SMH, XLK]   # الأسهم + صناديق ETF عادية (بلا رافعة)
