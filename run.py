@@ -71,6 +71,12 @@ async def run_bot(settings) -> None:
         from bot.polls import polls_loop
         tasks.append(asyncio.create_task(polls_loop(settings, storage, rewriter, publisher, alert, pipeline)))
 
+    ideas_pub = None
+    if settings.ideas.get("enabled") and settings.ideas.get("channel"):
+        from bot.ideas import ideas_loop
+        ideas_pub = Publisher(settings.bot_token, settings.ideas["channel"], settings.dry_run)
+        tasks.append(asyncio.create_task(ideas_loop(settings, storage, ideas_pub, alert)))
+
     if settings.promo.get("enabled"):
         from bot.promo import promo_loop
         tasks.append(asyncio.create_task(
@@ -106,6 +112,8 @@ async def run_bot(settings) -> None:
         await pipeline.close()
         await rewriter.close()
         await publisher.close()
+        if ideas_pub:
+            await ideas_pub.close()
 
 
 async def run_once(settings) -> None:
@@ -164,6 +172,16 @@ async def run_once(settings) -> None:
                 await post_due_poll(settings, storage, rewriter, publisher, pipeline)
             except Exception as exc:
                 log.warning("Poll failed (will retry next run): %s", exc)
+        if settings.ideas.get("enabled") and settings.ideas.get("channel"):
+            from bot.ideas import follow_ideas, post_due_idea
+            ideas_pub = Publisher(settings.bot_token, settings.ideas["channel"], settings.dry_run)
+            try:
+                await post_due_idea(settings, storage, ideas_pub)
+                await follow_ideas(settings, storage, ideas_pub)
+            except Exception as exc:
+                log.warning("Trade ideas failed (will retry next run): %s", exc)
+            finally:
+                await ideas_pub.close()
         log.info("Run finished: %d published", pipeline.published)
     finally:
         await pipeline.close()
@@ -227,10 +245,23 @@ async def test_rss(settings, per_feed: int = 2) -> None:
         await publisher.close()
 
 
+async def idea_sample(settings) -> None:
+    """Posts the best trade idea right now (market open or not) to the ideas channel, for a test."""
+    from bot.ideas import post_due_idea
+    storage = Storage(":memory:")
+    pub = Publisher(settings.bot_token, settings.ideas.get("channel"), settings.dry_run)
+    try:
+        settings.ideas["enabled"] = True
+        n = await post_due_idea(settings, storage, pub, force=True)
+        print(f"{n} idea(s) posted")
+    finally:
+        await pub.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="COINBABA news bot")
     parser.add_argument("command", nargs="?", default="run",
-                        choices=["run", "once", "find-channel", "test-rss", "mirror-backfill"])
+                        choices=["run", "once", "find-channel", "test-rss", "mirror-backfill", "idea-sample"])
     args = parser.parse_args()
     settings = load_settings()
     setup_logging(settings)
@@ -243,6 +274,8 @@ def main() -> None:
             for cfg in settings.mirrors:
                 n = asyncio.run(run_mirror(cfg, settings.bot_token, storage, silent=True, backfill=True))
                 print(f"{cfg['source']} -> {cfg['target']}: {n} old post(s) copied")
+        elif args.command == "idea-sample":
+            asyncio.run(idea_sample(settings))
         elif args.command == "once":
             asyncio.run(run_once(settings))
         elif args.command == "test-rss":

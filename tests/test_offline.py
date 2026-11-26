@@ -325,3 +325,49 @@ class PipelineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---- trade ideas -------------------------------------------------------------
+import unittest as _ut
+
+
+class TradeIdeaTests(_ut.TestCase):
+    def _data(self, **kw):
+        base = {"ticker": "TEST", "side": "long", "entry_low": 99, "entry_high": 101, "entry": 100,
+                "stop": 95, "tp1": 110, "tp2": 115, "posted_at": 1000, "status": "open",
+                "filled": False, "tp1_hit": False}
+        base.update(kw)
+        return base
+
+    def test_long_hits_tp1_then_breakeven(self):
+        from bot.ideas import evaluate
+        d = self._data()
+        ev = evaluate(d, [(1100, 101, 99), (1200, 111, 104), (1300, 104, 99.5)])
+        self.assertEqual(ev, ["tp1", "breakeven"])
+
+    def test_stop_wins_when_same_bar(self):
+        from bot.ideas import evaluate
+        d = self._data()
+        self.assertEqual(evaluate(d, [(1100, 100, 99), (1200, 111, 94)]), ["stopped"])
+
+    def test_short_full_target(self):
+        from bot.ideas import evaluate
+        d = self._data(side="short", stop=105, tp1=90, tp2=85)
+        self.assertEqual(evaluate(d, [(1100, 100.5, 99), (1200, 99, 89), (1300, 95, 84)]), ["tp1", "tp2"])
+
+    def test_cancel_when_entry_not_reached(self):
+        from bot.ideas import evaluate
+        d = self._data()
+        self.assertEqual(evaluate(d, [(1100, 108, 104), (1000 + 3 * 86400, 109, 105)]), ["cancelled"])
+
+    def test_build_idea_uptrend(self):
+        from bot.ideas import Candles, build_idea
+        closes = [100 + i * 0.5 + (2 if i % 6 < 3 else -2) for i in range(120)]
+        c = Candles("T", list(range(120)), closes, [x + 1.5 for x in closes], [x - 1.5 for x in closes],
+                    closes, closes[-1], True)
+        idea = build_idea(c)
+        if idea:  # when produced, it must be coherent
+            self.assertEqual(idea.side, "long")
+            self.assertLess(idea.stop, idea.entry_low)
+            self.assertGreater(idea.tp2, idea.tp1)
+            self.assertGreaterEqual(idea.rr, 1.5 - 1e-9)

@@ -94,6 +94,18 @@ class Publisher:
         await react(self._client, self.base, self.channel, result.get("message_id"))
         return result.get("message_id")
 
+    async def send_reply(self, html_text: str, reply_to: Optional[int]) -> Optional[int]:
+        """A short HTML message under an earlier post (used for trade-idea results)."""
+        if self.dry_run:
+            print(f"\n[DRY RUN reply to {reply_to}]\n{html_text}")
+            return None
+        data = {"chat_id": str(self.channel), "text": html_text, "parse_mode": "HTML",
+                "disable_web_page_preview": "true"}
+        if reply_to:
+            data["reply_parameters"] = '{"message_id": %d, "allow_sending_without_reply": true}' % int(reply_to)
+        result = await self._call("sendMessage", data=data)
+        return result.get("message_id")
+
     async def send_promo(self, text: str, buttons: List[dict], image_url: Optional[str] = None) -> Optional[int]:
         """Sends the daily promo post with clickable link buttons under it."""
         import json
