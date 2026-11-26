@@ -89,7 +89,7 @@ class FacebookPage:
         self.tz = ZoneInfo(tz)
         self.dry_run = dry_run
         self.alert = alert
-        version = str(cfg.get("graph_version") or "v23.0")
+        version = str(cfg.get("graph_version") or "v27.0")
         self.base = f"https://graph.facebook.com/{version}/"
         self._client = httpx.AsyncClient(timeout=120)
         self._dry_posts: List[float] = []
