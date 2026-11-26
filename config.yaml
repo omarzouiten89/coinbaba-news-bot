@@ -66,9 +66,11 @@ llm_min_interval_seconds: 7
 # ===== 📘 النشر في صفحة فيسبوك COINBABA (نفس منشورات Telegram، بلا روابط، مع هاشتاغات) =====
 # المفاتيح (FB_PAGE_ID و FB_PAGE_TOKEN) كيتحطو فـ .env وفـ GitHub Secrets، ماشي هنا.
 facebook:
-  enabled: false              # كيولي true ملي نحطو المفاتيح
-  daily_max: 10               # أقصى عدد فالنهار (كيتحسب من الصفحة نفسها، حتى إلا خدم Mac و GitHub)
-  min_gap_minutes: 45         # أقل وقت بين خبرين (الملخص والمعلومات ما كيتسناوش)
+  enabled: true
+  daily_max: 5                # البداية: 5 فالنهار لمدة أسبوعين، من بعد 8 حتى 10 (كيتحسب من الصفحة نفسها)
+  min_gap_minutes: 60         # أقل وقت بين خبرين (الملخص والمعلومات ما كيتسناوش)
+  graph_version: v27.0
+  stories: true               # كل منشور فيه صورة كيتزاد حتى فـ Story ديال الصفحة (نفس الصورة)
   news_min_importance: 7      # غير الأخبار المهمة (من 10). Telegram كينشر من 6
   kinds: [news, analysis, lesson, morning]   # الاستطلاعات وأفكار التداول ما كيتنشروش فـ فيسبوك
   max_hashtags: 5

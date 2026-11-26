@@ -82,6 +82,32 @@ class FacebookTests(unittest.TestCase):
         self.assertIn("daily max", p.reason_to_skip("lesson", None, [1, 2, 3], now))
         self.assertIn("not enabled", p.reason_to_skip("poll", None, [], now))
 
+    def test_story_follows_photo_post(self):
+        import httpx
+        from bot.facebook import FacebookPage
+        calls = []
+
+        def handler(request):
+            path = request.url.path
+            calls.append((request.method, path.split("/", 2)[-1], request.content))
+            if request.method == "GET":
+                return httpx.Response(200, json={"data": []})
+            if path.endswith("/photo_stories"):
+                return httpx.Response(200, json={"success": True, "post_id": "story1"})
+            return httpx.Response(200, json={"id": "ph%d" % len(calls), "post_id": "1_%d" % len(calls)})
+
+        p = FacebookPage("1", "t", {"stories": True}, "Asia/Dubai")
+        p._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        asyncio.run(p.maybe_post("خبر مهم عن البيتكوين", b"img", "news", 9))
+        posts = [c for c in calls if c[0] == "POST"]
+        self.assertEqual([c[1] for c in posts], ["1/photos", "1/photos", "1/photo_stories"])
+        self.assertIn(b"published", posts[1][2])
+        self.assertIn(b"photo_id", posts[2][2])
+
+        calls.clear()
+        asyncio.run(p.maybe_post("خبر بلا صورة", None, "news", 9))
+        self.assertEqual([c[1] for c in calls if c[0] == "POST"], ["1/feed"])  # no image: no story
+
     def test_dry_run_counts_posts(self):
         p = self.page(daily_max=1)
         first = asyncio.run(p.maybe_post("خبر مهم عن الذهب", None, "news", 9))

@@ -89,7 +89,7 @@ class FacebookPage:
         self.tz = ZoneInfo(tz)
         self.dry_run = dry_run
         self.alert = alert
-        version = str(cfg.get("graph_version") or "v23.0")
+        version = str(cfg.get("graph_version") or "v27.0")
         self.base = f"https://graph.facebook.com/{version}/"
         self._client = httpx.AsyncClient(timeout=120)
         self._dry_posts: List[float] = []
@@ -153,12 +153,40 @@ class FacebookPage:
                 log.info("Facebook: skipped (%s)", why)
                 return None
             message = facebook_text(text, kind, int(self.cfg.get("max_hashtags", 5)), is_html)
-            return await self._publish(message, image)
+            post_id = await self._publish(message, image)
         except Exception as exc:
             log.warning("Facebook post failed: %s", exc)
             if self.alert:
                 await self.alert(f"مشكل في النشر على فيسبوك: {str(exc)[:300]}")
             return None
+        if image and self.cfg.get("stories"):
+            try:
+                await self._publish_story(image)
+            except Exception as exc:  # the feed post is already out: a story problem is only reported
+                log.warning("Facebook story failed: %s", exc)
+                if self.alert:
+                    await self.alert(f"مشكل في نشر الستوري على فيسبوك: {str(exc)[:300]}")
+        return post_id
+
+    async def _publish_story(self, image: bytes) -> Optional[str]:
+        """Same picture as a Page story: upload it unpublished (a story needs its own copy), then publish."""
+        if self.dry_run:
+            print("[DRY RUN Facebook] + story with the same image")
+            return "dry-run-story"
+        resp = await self._client.post(self.base + f"{self.page_id}/photos",
+                                       data={"published": "false", "access_token": self.token},
+                                       files={"source": ("story.jpg", image)})
+        data = resp.json()
+        if "error" in data:
+            raise RuntimeError(data["error"].get("message", "unknown error"))
+        resp = await self._client.post(self.base + f"{self.page_id}/photo_stories",
+                                       data={"photo_id": data["id"], "access_token": self.token})
+        data = resp.json()
+        if "error" in data:
+            raise RuntimeError(data["error"].get("message", "unknown error"))
+        story_id = data.get("post_id") or data.get("id")
+        log.info("Facebook: story published %s", story_id)
+        return story_id
 
     async def _publish(self, message: str, image: Optional[bytes]) -> Optional[str]:
         if self.dry_run:

@@ -267,7 +267,7 @@ async def facebook_check(settings) -> None:
     import httpx
     if not (settings.fb_page_id and settings.fb_page_token):
         sys.exit("❌ FB_PAGE_ID ولا FB_PAGE_TOKEN خاوي فـ .env")
-    version = (settings.facebook or {}).get("graph_version") or "v23.0"
+    version = (settings.facebook or {}).get("graph_version") or "v27.0"
     async with httpx.AsyncClient(timeout=30) as client:
         data = (await client.get(f"https://graph.facebook.com/{version}/{settings.fb_page_id}",
                                  params={"fields": "name", "access_token": settings.fb_page_token})).json()
