@@ -3,6 +3,7 @@
     python3 run.py                 start the bot (keeps running)
     python3 run.py find-channel    show the id of the channel where you added the bot
     python3 run.py test-rss        dry test: rewrite the latest website news and PRINT them (publishes nothing)
+    python3 run.py facebook-check  checks FB_PAGE_ID / FB_PAGE_TOKEN (publishes nothing)
 """
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from logging.handlers import RotatingFileHandler
 
 from bot.config import BASE_DIR, load_settings
 from bot.pipeline import Pipeline
+from bot.facebook import facebook_from_settings
 from bot.publisher import Alerter, Publisher
 from bot.rewriter import FakeRewriter, GeminiRewriter
 from bot.rss_source import fetch_feed, rss_loop
@@ -41,6 +43,7 @@ async def run_bot(settings) -> None:
     storage.prune_seen()
     publisher = Publisher(settings.bot_token, settings.target_channel, settings.dry_run)
     alert = Alerter(publisher, settings.owner_chat_id)
+    publisher.facebook = facebook_from_settings(settings, alert)
     rewriter = GeminiRewriter(settings.gemini_api_key, settings.gemini_model, settings.llm_min_interval_seconds)
     pipeline = Pipeline(settings, storage, rewriter, publisher, alert)
 
@@ -127,6 +130,7 @@ async def run_once(settings) -> None:
     storage.prune_seen()
     publisher = Publisher(settings.bot_token, settings.target_channel, settings.dry_run)
     alert = Alerter(publisher, settings.owner_chat_id)
+    publisher.facebook = facebook_from_settings(settings, alert)
     rewriter = GeminiRewriter(settings.gemini_api_key, settings.gemini_model, settings.llm_min_interval_seconds)
     pipeline = Pipeline(settings, storage, rewriter, publisher, alert)
     try:
@@ -258,10 +262,26 @@ async def idea_sample(settings) -> None:
         await pub.close()
 
 
+async def facebook_check(settings) -> None:
+    """Reads the Page name with the saved token: proves the keys work, publishes nothing."""
+    import httpx
+    if not (settings.fb_page_id and settings.fb_page_token):
+        sys.exit("❌ FB_PAGE_ID ولا FB_PAGE_TOKEN خاوي فـ .env")
+    version = (settings.facebook or {}).get("graph_version") or "v23.0"
+    async with httpx.AsyncClient(timeout=30) as client:
+        data = (await client.get(f"https://graph.facebook.com/{version}/{settings.fb_page_id}",
+                                 params={"fields": "name", "access_token": settings.fb_page_token})).json()
+    if "error" in data:
+        sys.exit("❌ فيسبوك رفض المفتاح: " + data["error"].get("message", "")[:200])
+    print(f"✅ المفتاح خدام. الصفحة: {data.get('name')}")
+    print("   النشر: " + ("مشعول" if (settings.facebook or {}).get("enabled") else "مطفي (facebook.enabled فـ config.yaml)"))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="COINBABA news bot")
     parser.add_argument("command", nargs="?", default="run",
-                        choices=["run", "once", "find-channel", "test-rss", "mirror-backfill", "idea-sample"])
+                        choices=["run", "once", "find-channel", "test-rss", "mirror-backfill", "idea-sample",
+                                 "facebook-check"])
     args = parser.parse_args()
     settings = load_settings()
     setup_logging(settings)
@@ -278,6 +298,8 @@ def main() -> None:
             asyncio.run(idea_sample(settings))
         elif args.command == "once":
             asyncio.run(run_once(settings))
+        elif args.command == "facebook-check":
+            asyncio.run(facebook_check(settings))
         elif args.command == "test-rss":
             asyncio.run(test_rss(settings))
         else:

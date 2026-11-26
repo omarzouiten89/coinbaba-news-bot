@@ -4,6 +4,8 @@
     python3 set_key.py api_hash
     python3 set_key.py gemini
     python3 set_key.py bot_token
+    python3 set_key.py fb_page_id
+    python3 set_key.py fb_page_token
 """
 import re
 import sys
@@ -19,12 +21,14 @@ KEYS = {
     "api_hash": ("TELEGRAM_API_HASH", r"[0-9a-f]{32}", "api_hash = 32 حرف ورقم (a-f و 0-9)"),
     "gemini": ("GEMINI_API_KEY", r"(AIza|AQ\.)[A-Za-z0-9_\-\.]{25,}", "مفتاح Gemini كيبدا بـ AIza أو AQ."),
     "bot_token": ("BOT_TOKEN", r"\d{6,}:[A-Za-z0-9_\-]{30,}", "Token البوت فيه أرقام ثم : ثم حروف"),
+    "fb_page_id": ("FB_PAGE_ID", r"\d{6,25}", "رقم الصفحة = أرقام فقط"),
+    "fb_page_token": ("FB_PAGE_TOKEN", r"EA[A-Za-z0-9]{50,}", "Token الصفحة كيبدا بـ EA وفيه بزاف ديال الحروف"),
 }
 
 
 def main() -> None:
     if len(sys.argv) < 2 or sys.argv[1] not in KEYS:
-        print("استعمل: python3 set_key.py api_id | api_hash | gemini | bot_token")
+        print("استعمل: python3 set_key.py " + " | ".join(KEYS))
         sys.exit(1)
     env_name, pattern, hint = KEYS[sys.argv[1]]
     if "--clipboard" in sys.argv:

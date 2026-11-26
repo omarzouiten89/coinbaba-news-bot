@@ -41,6 +41,9 @@ class Settings:
     news_min_importance: int = 0
     quiet_hours: dict = field(default_factory=dict)
     silent_news: bool = False
+    facebook: dict = field(default_factory=dict)
+    fb_page_id: str = ""
+    fb_page_token: str = ""
 
 
 def _int_or_none(value: Optional[str]) -> Optional[int]:
@@ -104,4 +107,7 @@ def load_settings(config_path: Optional[Path] = None) -> Settings:
         news_min_importance=int(cfg.get("news_min_importance") or 0),
         quiet_hours=dict(cfg.get("quiet_hours") or {}),
         silent_news=bool(cfg.get("silent_news", False)),
+        facebook=dict(cfg.get("facebook") or {}),
+        fb_page_id=os.getenv("FB_PAGE_ID", "").strip(),
+        fb_page_token=os.getenv("FB_PAGE_TOKEN", "").strip(),
     )
