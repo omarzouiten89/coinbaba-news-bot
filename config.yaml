@@ -131,8 +131,10 @@ daily_promo:
 # كل الأرقام محسوبة من الشموع الحقيقية (Yahoo)، والبوت كيرد على كل فكرة بالنتيجة ديالها.
 trade_ideas:
   enabled: true
-  channel: "-1004409432582"   # دابا: القناة التجريبية. من بعد: قناة الأسهم الجديدة
+  channel: "-1005998542468"   # الاسهم الامريكية vip
   handle: ""                   # مثال: "@financeman_stocks"
   times: ["18:45", "20:30"]    # بتوقيت الإمارات (السوق الأمريكي كيحل 18:30 فالشتا)
   per_slot: 1                  # فكرة وحدة فكل وقت
-  tickers: [NVDA, MSFT, AAPL, AMZN, GOOGL, META, TSLA, AMD, NFLX, PLTR]
+  long_only: true               # شراء مباشر فقط: بلا رافعة، بلا Short، بلا عقود آجلة
+  tickers: [NVDA, MSFT, AAPL, AMZN, GOOGL, META, TSLA, AMD, NFLX, PLTR,
+            CNDX.L, CSPX.L, IUIT.L, SMH.L]   # صناديق ETF كيفما كاينين فـ XTB (CNDX.UK, CSPX.UK...)

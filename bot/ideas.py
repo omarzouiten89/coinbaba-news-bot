@@ -40,7 +40,19 @@ NAMES = {
     "NVDA": "إنفيديا NVIDIA", "MSFT": "مايكروسوفت Microsoft", "AAPL": "آبل Apple",
     "AMZN": "أمازون Amazon", "GOOGL": "جوجل Alphabet", "META": "ميتا Meta",
     "TSLA": "تسلا Tesla", "AMD": "إي إم دي AMD", "NFLX": "نتفليكس Netflix", "PLTR": "بالانتير Palantir",
+    # ETFs as XTB sells them (UCITS, London, in USD). Yahoo symbol -> name
+    "CNDX.L": "صندوق ناسداك 100 (ETF)", "CSPX.L": "صندوق S&P 500 (ETF)",
+    "IUIT.L": "صندوق التكنولوجيا الأمريكية (ETF)", "SMH.L": "صندوق أشباه الموصلات (ETF)",
 }
+
+
+def symbol(ticker: str) -> str:
+    """The symbol as it appears on XTB: London ETFs end with .UK there."""
+    return ticker[:-2] + ".UK" if ticker.endswith(".L") else ticker
+
+
+def tag(ticker: str) -> str:
+    return ticker.split(".")[0]
 DEFAULT_TICKERS = list(NAMES)
 
 TIPS = [
@@ -52,7 +64,8 @@ TIPS = [
     "الدعم منطقة يكثر فيها الشراء، والمقاومة منطقة يكثر فيها البيع، وليست خطاً دقيقاً.",
     "إذا لم يصل السعر إلى منطقة الدخول، فلا تطارده: الفرصة القادمة ستأتي.",
     "سجّل كل صفقة في دفتر: سبب الدخول، النتيجة، وما تعلمته منها.",
-    "البيع (Short) يعني الربح من هبوط السعر، ووقف الخسارة يكون فوق سعر الدخول.",
+    "الشراء بدون رافعة يعني أنك تملك السهم فعلاً، ولا يمكن أن تخسر أكثر مما استثمرته.",
+    "صناديق ETF تجمع عدة شركات في سهم واحد، فتقل المخاطرة مقارنة بشراء شركة واحدة.",
     "المتوسط المتحرك 50 يوماً يوضح الاتجاه العام: السعر فوقه = اتجاه صاعد غالباً.",
 ]
 
@@ -174,8 +187,10 @@ def _targets(entry: float, risk: float, levels: List[float], sign: int, min_rr: 
     return entry + sign * d1, entry + sign * d2
 
 
-def build_idea(c: Candles, min_rr: float = 1.5, max_risk_pct: float = 7.0) -> Optional[Idea]:
-    """A clear-trend setup near a level, or None when there is nothing clean to show."""
+def build_idea(c: Candles, min_rr: float = 1.5, max_risk_pct: float = 7.0,
+               long_only: bool = True) -> Optional[Idea]:
+    """A clear-trend setup near a level, or None when there is nothing clean to show.
+    long_only: buying the real share/ETF without leverage (no short selling, no CFD, no futures)."""
     closes, highs, lows = c.closes, c.highs, c.lows
     s20, s50, r, a = sma(closes, 20), sma(closes, 50), rsi(closes), atr(highs, lows, closes)
     if None in (s20, s50, r, a) or a <= 0:
@@ -197,7 +212,7 @@ def build_idea(c: Candles, min_rr: float = 1.5, max_risk_pct: float = 7.0) -> Op
                    "المتوسط 20 يوماً فوق المتوسط 50 يوماً (زخم إيجابي)"]
         if level:
             reasons.append(f"قريب من منطقة دعم عند {LTR.format(_usd(level))}")
-    elif price < s50 and s20 < s50 and 32 <= r <= 60:
+    elif not long_only and price < s50 and s20 < s50 and 32 <= r <= 60:
         side = "short"
         above = [x for x in resistances if price < x <= price + 3 * a]
         level = min(above) if above else None
@@ -236,11 +251,11 @@ def _pct(x: float, ref: float) -> str:
 
 def build_text(idea: Idea, tip: str, handle: str = "") -> str:
     name = NAMES.get(idea.ticker, idea.ticker)
-    side = "🟢 شراء (Long)" if idea.side == "long" else "🔴 بيع (Short)"
+    side = "🟢 شراء مباشر (بدون رافعة)" if idea.side == "long" else "🔴 بيع (Short)"
     e = idea.entry
     lines = [
         f"💡 <b>فكرة تداولية: {name}</b>",
-        f"{side}  |  إطار يومي  |  {LTR.format('$' + idea.ticker)}",
+        f"{side}  |  إطار يومي  |  XTB: {LTR.format(symbol(idea.ticker))}",
         SEP,
         f"📍 <b>منطقة الدخول:</b> {LTR.format(_usd(idea.entry_low) + ' – ' + _usd(idea.entry_high))}",
         f"🛑 <b>وقف الخسارة:</b> {LTR.format(_usd(idea.stop))}  ({_pct(idea.stop, e)})",
@@ -256,7 +271,7 @@ def build_text(idea: Idea, tip: str, handle: str = "") -> str:
         "⚠️ <i>فكرة تعليمية للتطبيق على الحساب التجريبي، وليست نصيحة استثمارية. "
         "إذا لم يصل السعر إلى منطقة الدخول خلال يومين، تُلغى الفكرة.</i>",
         "",
-        f"#{idea.ticker} #فكرة_تداولية #الأسهم_الأمريكية",
+        f"#{tag(idea.ticker)} #فكرة_تداولية #الأسهم_الأمريكية",
     ]
     return "\n".join(lines)
 
@@ -321,9 +336,9 @@ def render_chart(c: Candles, idea: Idea, handle: str = "", bars: int = 70) -> by
 
     # header
     side_col = (38, 196, 133) if idea.side == "long" else (234, 76, 92)
-    d.text((40, 58), idea.ticker, font=_latin_font(64), fill=WHITE, anchor="lm")
-    tw = d.textlength(idea.ticker, font=_latin_font(64))
-    side_txt = "LONG" if idea.side == "long" else "SHORT"
+    d.text((40, 58), symbol(idea.ticker), font=_latin_font(64), fill=WHITE, anchor="lm")
+    tw = d.textlength(symbol(idea.ticker), font=_latin_font(64))
+    side_txt = "BUY" if idea.side == "long" else "SHORT"
     sw = d.textlength(side_txt, font=_latin_font(30))
     d.rounded_rectangle([40 + tw + 24, 36, 40 + tw + 24 + sw + 36, 82], radius=22, fill=side_col)
     d.text((40 + tw + 42, 59), side_txt, font=_latin_font(30), fill=(8, 14, 32), anchor="lm")
@@ -351,7 +366,8 @@ def render_chart(c: Candles, idea: Idea, handle: str = "", bars: int = 70) -> by
 
 # ---------------------------------------------------------------- posting
 
-async def pick_ideas(client: httpx.AsyncClient, tickers: List[str], recent: set, count: int):
+async def pick_ideas(client: httpx.AsyncClient, tickers: List[str], recent: set, count: int,
+                     long_only: bool = True):
     found = []
     for t in tickers:
         if t in recent:
@@ -361,7 +377,7 @@ async def pick_ideas(client: httpx.AsyncClient, tickers: List[str], recent: set,
         except Exception as exc:  # one bad ticker never stops the others
             log.info("No data for %s: %s", t, exc)
             continue
-        idea = build_idea(c)
+        idea = build_idea(c, long_only=long_only)
         if idea:
             found.append((idea, c))
     found.sort(key=lambda x: x[0].score, reverse=True)
@@ -398,7 +414,7 @@ async def post_due_idea(settings, storage, publisher, force: bool = False) -> in
             storage.set(slot_key, "market-closed")
             log.info("US market closed: no trade idea this slot")
             return 0
-        picks = await pick_ideas(client, tickers, recent, per_slot)
+        picks = await pick_ideas(client, tickers, recent, per_slot, bool(cfg.get("long_only", True)))
     if not picks:
         storage.set(slot_key, "no-setup")
         log.info("No clean setup this slot")
@@ -460,7 +476,7 @@ def evaluate(data: dict, bars: List[tuple]) -> List[str]:
 
 
 def result_text(data: dict, event: str, price: float) -> str:
-    t, e = data["ticker"], data["entry"]
+    t, e = symbol(data["ticker"]), data["entry"]
     sign = 1 if data["side"] == "long" else -1
     pct = lambda v: LTR.format(f"{sign * (v - e) / e * 100:+.1f}%")  # noqa: E731
     if event == "tp1":
