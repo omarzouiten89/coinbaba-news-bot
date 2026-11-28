@@ -98,6 +98,7 @@ class FacebookTests(unittest.TestCase):
 
         p = FacebookPage("1", "t", {"stories": True}, "Asia/Dubai")
         p._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        p._page_ready = True  # page lookup is tested separately
         asyncio.run(p.maybe_post("خبر مهم عن البيتكوين", b"img", "news", 9))
         posts = [c for c in calls if c[0] == "POST"]
         self.assertEqual([c[1] for c in posts], ["1/photos", "1/photos", "1/photo_stories"])
@@ -107,6 +108,59 @@ class FacebookTests(unittest.TestCase):
         calls.clear()
         asyncio.run(p.maybe_post("خبر بلا صورة", None, "news", 9))
         self.assertEqual([c[1] for c in calls if c[0] == "POST"], ["1/feed"])  # no image: no story
+
+    def _mock_page(self, user_token):
+        import httpx
+        from bot.facebook import FacebookPage
+        calls = []
+
+        def handler(request):
+            path, q = request.url.path, dict(request.url.params)
+            calls.append((request.method, path.split("/", 2)[-1], q, request.content))
+            if path.endswith("/CoinbabaCrypto"):
+                if "access_token" in q.get("fields", "") and not user_token:
+                    return httpx.Response(400, json={"error": {"message": "page token"}})
+                body = {"id": "555", "name": "COINBABA"}
+                if user_token:
+                    body["access_token"] = "PAGE_TOKEN"
+                return httpx.Response(200, json=body)
+            if request.method == "GET":
+                return httpx.Response(200, json={"data": []})
+            return httpx.Response(200, json={"id": "p1", "post_id": "555_1"})
+
+        p = FacebookPage("", "GIVEN", {"page": "CoinbabaCrypto"}, "Asia/Dubai")
+        p._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        return p, calls
+
+    def test_page_found_from_name_with_page_token(self):
+        p, calls = self._mock_page(user_token=False)
+        self.assertEqual(asyncio.run(p.maybe_post("خبر مهم", None, "news", 9)), "555_1")
+        self.assertEqual(p.page_id, "555")
+        self.assertEqual(calls[-1][1], "555/feed")
+        self.assertIn(b"GIVEN", calls[-1][3])
+
+    def test_page_token_taken_from_user_token(self):
+        p, calls = self._mock_page(user_token=True)
+        asyncio.run(p.maybe_post("خبر مهم", None, "news", 9))
+        self.assertIn(b"PAGE_TOKEN", calls[-1][3])
+
+    def test_facebook_still_posts_when_telegram_fails(self):
+        from bot.publisher import Publisher, PublishError
+
+        class FB:
+            posted = []
+            async def maybe_post(self, *a):
+                self.posted.append(a)
+
+        pub = Publisher("x", "-1", dry_run=False)
+        pub.facebook = FB()
+
+        async def broken(*a):
+            raise PublishError("sendMessage: Not Found")
+        pub._send_telegram_post = broken
+        with self.assertRaises(PublishError):
+            asyncio.run(pub.send_post("خبر", None, fb_kind="news", importance=9))
+        self.assertEqual(len(FB.posted), 1)
 
     def test_dry_run_counts_posts(self):
         p = self.page(daily_max=1)

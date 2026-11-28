@@ -70,6 +70,7 @@ facebook:
   daily_max: 5                # البداية: 5 فالنهار لمدة أسبوعين، من بعد 8 حتى 10 (كيتحسب من الصفحة نفسها)
   min_gap_minutes: 60         # أقل وقت بين خبرين (الملخص والمعلومات ما كيتسناوش)
   graph_version: v27.0
+  page: CoinbabaCrypto        # سمية الصفحة (facebook.com/CoinbabaCrypto): كتخلي FB_PAGE_ID اختياري
   stories: true               # كل منشور فيه صورة كيتزاد حتى فـ Story ديال الصفحة (نفس الصورة)
   news_min_importance: 7      # غير الأخبار المهمة (من 10). Telegram كينشر من 6
   kinds: [news, analysis, lesson, morning]   # الاستطلاعات وأفكار التداول ما كيتنشروش فـ فيسبوك
