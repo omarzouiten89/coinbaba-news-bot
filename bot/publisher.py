@@ -65,7 +65,13 @@ class Publisher:
         is_html=True: `text` is already Telegram HTML (bold, separators...) and is sent as is.
         fb_kind ("news", "analysis", "lesson", "morning"): also copy it to the Facebook Page,
         if Facebook is on and its limits allow it. A Facebook problem never stops the Telegram post."""
-        message_id = await self._send_telegram_post(text, image, silent, is_html)
+        try:
+            message_id = await self._send_telegram_post(text, image, silent, is_html)
+        except PublishError:
+            # Telegram is down (e.g. wrong BOT_TOKEN): the Page still gets the post, then the error is reported.
+            if self.facebook and fb_kind:
+                await self.facebook.maybe_post(text, image, fb_kind, importance, is_html)
+            raise
         if self.facebook and fb_kind:
             await self.facebook.maybe_post(text, image, fb_kind, importance, is_html)
         return message_id

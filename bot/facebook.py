@@ -111,6 +111,31 @@ class FacebookPage:
         return list(self.cfg.get("kinds") or ["news", "analysis", "lesson", "morning"])
 
     # --- Page state ---------------------------------------------------------
+    async def _ensure_page(self) -> None:
+        """FB_PAGE_ID may be left empty: the Page is found from its name (`page` in config.yaml).
+        Works with a Page token, and also with a user token of a Page admin: then the Page's
+        own token is taken from Facebook, so posts are always published as the Page."""
+        if self.dry_run or getattr(self, "_page_ready", False):
+            return
+        ref = self.page_id or str(self.cfg.get("page") or "").strip()
+        if not ref:
+            raise RuntimeError("FB_PAGE_ID is empty and `page` is missing in config.yaml")
+        resp = await self._client.get(self.base + ref, params={
+            "fields": "id,name,access_token", "access_token": self.token})
+        data = resp.json()
+        if "error" in data:
+            # A Page token cannot read its own access_token field: ask without it.
+            resp = await self._client.get(self.base + ref, params={
+                "fields": "id,name", "access_token": self.token})
+            data = resp.json()
+            if "error" in data:
+                raise RuntimeError(data["error"].get("message", "unknown error"))
+        self.page_id = str(data["id"])
+        if data.get("access_token"):
+            self.token = data["access_token"]
+        self._page_ready = True
+        log.info("Facebook: posting to Page %s (%s)", data.get("name"), self.page_id)
+
     async def _recent_post_times(self) -> List[float]:
         """Unix times of the Page's posts since local midnight (read from Facebook itself)."""
         if self.dry_run:
@@ -147,6 +172,7 @@ class FacebookPage:
                          importance: Optional[int] = None, is_html: bool = False) -> Optional[str]:
         """Posts to the Page if the rules allow it. Never raises: returns the post id or None."""
         try:
+            await self._ensure_page()
             times = await self._recent_post_times()
             why = self.reason_to_skip(kind, importance, times)
             if why:
@@ -216,8 +242,8 @@ def facebook_from_settings(settings, alert=None) -> Optional[FacebookPage]:
     cfg = settings.facebook or {}
     if not cfg.get("enabled"):
         return None
-    if not settings.dry_run and not (settings.fb_page_id and settings.fb_page_token):
-        log.warning("Facebook enabled but FB_PAGE_ID / FB_PAGE_TOKEN missing in .env: skipped")
+    if not settings.dry_run and not settings.fb_page_token:
+        log.warning("Facebook enabled but FB_PAGE_TOKEN missing in .env: skipped")
         return None
     return FacebookPage(settings.fb_page_id, settings.fb_page_token, cfg, settings.timezone,
                         settings.dry_run, alert)
